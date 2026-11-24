@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SINGULARIS — Архитектор Гравитации</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="gpu-canvas"></canvas>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Live Tactical HUD -->
+  <header class="hud" id="hud" hidden>
+    <div class="hud-left">
+      <div class="hud-panel hud-bars">
+        <div class="bar-row">
+          <span class="bar-label">КОРПУС</span>
+          <div class="bar-track"><div id="bar-hp" class="bar-fill fill-hp" style="width:100%"></div></div>
+          <span id="val-hp" class="bar-val">100/100</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">ЩИТ</span>
+          <div class="bar-track"><div id="bar-shield" class="bar-fill fill-shield" style="width:100%"></div></div>
+          <span id="val-shield" class="bar-val">60</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">ХРОНО</span>
+          <div class="bar-track"><div id="bar-chrono" class="bar-fill fill-chrono" style="width:100%"></div></div>
+          <span class="bar-val">SPACE</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label" id="hud-level">УР. 1</span>
+          <div class="bar-track"><div id="bar-xp" class="bar-fill fill-xp" style="width:0%"></div></div>
+          <span class="bar-val">ОПЫТ</span>
+        </div>
+      </div>
+      <div id="hud-build-strip" class="hud-build-strip" aria-label="Активные модули"></div>
+    </div>
+
+    <div class="hud-center">
+      <div class="hud-panel score-box">
+        <span id="hud-score" class="score-num">0</span>
+        <span id="hud-combo" class="combo-badge">×1.0</span>
+        <span id="hud-wave" class="wave-badge">ВОЛНА 1</span>
+      </div>
+      <div id="ai-telemetry-banner" class="ai-banner" hidden>ИИ-ТЕЛЕМЕТРИЯ АКТИВНА</div>
+    </div>
+
+    <div class="hud-actions">
+      <div class="btn-row">
+        <button type="button" id="btn-hud-menu" class="hud-btn">Меню [Esc]</button>
+        <button type="button" id="btn-hud-ai" class="hud-btn">ИИ-Пилот [P]</button>
+        <button type="button" id="btn-hud-polarity" class="hud-btn">Черная дыра [R]</button>
+        <button type="button" id="btn-hud-mute" class="hud-btn">Звук: ВКЛ</button>
+        <button type="button" id="btn-hud-modules" class="hud-btn">Модули [B]</button>
+        <button type="button" id="btn-hud-codex" class="hud-btn">Кодекс [H]</button>
+      </div>
+      <div class="ability-pills">
+        <span id="hud-dash" class="ready">[Shift] Рывок: ГОТОВ</span>
+        <span>•</span>
+        <span id="hud-rewind" class="ready">[Q] Откат: ГОТОВ</span>
+        <span>•</span>
+        <span id="hud-detonate" class="ready">[E] Взрыв: ГОТОВ</span>
+        <span>•</span>
+        <span id="hud-well-cd" class="ready">[ПКМ] Дыра: ГОТОВА</span>
+      </div>
+    </div>
+  </header>
+  <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
+
+  <!-- Mobile / Touch On-Screen Controls -->
+  <div id="touch-controls" class="touch-controls" hidden>
+    <div id="touch-joy-zone" class="touch-joy-zone" aria-label="Джойстик движения">
+      <div id="touch-joy-base" class="touch-joy-base">
+        <div id="touch-joy-knob" class="touch-joy-knob"></div>
+      </div>
+    </div>
+    <div id="touch-actions" class="touch-actions" aria-label="Кнопки управления">
+      <button type="button" id="touch-polarity" class="touch-btn touch-sm">Ч/Б</button>
+      <button type="button" id="touch-rewind" class="touch-btn touch-sm">ОТКАТ</button>
+      <button type="button" id="touch-detonate" class="touch-btn touch-sm">ВЗРЫВ</button>
+      <button type="button" id="touch-bt" class="touch-btn touch-md">ХРОНО</button>
+      <button type="button" id="touch-dash" class="touch-btn touch-md">РЫВОК</button>
+      <button type="button" id="touch-well" class="touch-btn touch-lg touch-violet">ДЫРА</button>
+      <button type="button" id="touch-fire" class="touch-btn touch-xl touch-cyan">ОГОНЬ</button>
+    </div>
+  </div>
+
+  <!-- Main Menu Modal (Native <dialog>) -->
+  <dialog id="title-dialog" aria-labelledby="title-heading">
+    <div class="modal-eyebrow">ТАКТИЧЕСКАЯ РЕЛЯТИВИСТСКАЯ ПЕСОЧНИЦА • ROGUELIKE</div>
+    <h1 id="title-heading" class="modal-title">SINGULARIS: АРХИТЕКТОР ГРАВИТАЦИИ</h1>
+    <p class="modal-sub">
+      Искривляйте пространство-время, разгоняйте залпы по орбитальной праще вокруг черных дыр, перехватывайте вражеские пули или передайте штурвал встроенному ИИ-агенту.
+    </p>
+
+    <div class="diff-section">
+      <div class="section-label">РЕЖИМ СЛОЖНОСТИ</div>
+      <div class="difficulty-row" role="group" aria-label="Сложность игры">
+        <button type="button" class="diff-btn" data-diff="easy" aria-pressed="false">
+          <span class="diff-name">КАДЕТ</span>
+          <span class="diff-meta">0.72× враги • +25% опыт</span>
+        </button>
+        <button type="button" class="diff-btn active" data-diff="normal" aria-pressed="true">
+          <span class="diff-name">АРХИТЕКТОР</span>
+          <span class="diff-meta">1.15× враги • стандарт</span>
+        </button>
+        <button type="button" class="diff-btn" data-diff="hard" aria-pressed="false">
+          <span class="diff-name">СИНГУЛЯРНОСТЬ</span>
+          <span class="diff-meta">1.60× враги • +50% очки</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="diff-section">
+      <div class="section-label">ГРАФИКА И ПРОИЗВОДИТЕЛЬНОСТЬ</div>
+      <div class="quality-row" role="group" aria-label="Режим производительности">
+        <button type="button" class="qual-btn" data-quality="low" aria-pressed="false">
+          <span class="diff-name">СЛАБЫЙ ПК</span>
+          <span class="diff-meta">макс. FPS • без blur</span>
+        </button>
+        <button type="button" class="qual-btn active" data-quality="medium" aria-pressed="true">
+          <span class="diff-name">БАЛАНС</span>
+          <span class="diff-meta">GPU • оптимально</span>
+        </button>
+        <button type="button" class="qual-btn" data-quality="high" aria-pressed="false">
+          <span class="diff-name">МОЩНЫЙ ПК</span>
+          <span class="diff-meta">ультра • WebGL шейдеры</span>
+        </button>
+      </div>
+    </div>
+
+    <nav class="menu-nav" aria-label="Главное меню">
+      <button type="button" id="btn-start-play" class="btn-primary menu-btn" autofocus>ИГРАТЬ</button>
+      <button type="button" id="btn-start-ai" class="btn-secondary menu-btn">ИИ-ДЕМО (ТЕСТ ИНТЕЛЛЕКТА)</button>
+      <button type="button" id="btn-open-settings-title" class="btn-ghost menu-btn">НАСТРОЙКИ</button>
+      <button type="button" id="btn-open-codex-title" class="btn-ghost menu-btn">КОДЕКС И УПРАВЛЕНИЕ</button>
+      <button type="button" id="btn-open-modules-title" class="btn-ghost menu-btn menu-btn-wide">КАТАЛОГ МОДУЛЕЙ (100)</button>
+    </nav>
+
+    <div class="controls-grid compact-controls">
+      <div class="ctrl-card">
+        <span class="ctrl-key">WASD + [Shift]</span>
+        <p>Маневры и фазовый рывок с неуязвимостью.</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">ЛКМ + ПКМ + [R]</span>
+        <p>Плазменный огонь и черные/белые дыры.</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">SPACE + [Q] + [E]</span>
+        <p>Bullet-Time, откат на 3с и взрыв дыр.</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">[B] + [P] + [Esc]</span>
+        <p>Каталог 100 модулей, ИИ-пилот и пауза.</p>
+      </div>
+    </div>
+
+    <div id="title-best-record" class="record-line"></div>
+  </dialog>
+
+  <!-- In-Game Pause Menu Modal -->
+  <dialog id="pause-dialog" aria-labelledby="pause-heading">
+    <div class="modal-eyebrow">ПАУЗА • КВАНТОВЫЙ СТАЗИС</div>
+    <h2 id="pause-heading" class="modal-title" style="font-size:30px">Меню паузы</h2>
+    <div id="pause-summary" class="pause-meta"></div>
+    <div id="pause-upgrades" class="upgrade-pills"></div>
+
+    <div class="menu-stack">
+      <button type="button" id="btn-pause-resume" class="btn-primary" autofocus>ПРОДОЛЖИТЬ [Esc]</button>
+      <button type="button" id="btn-pause-restart" class="btn-secondary">НАЧАТЬ ЗАНОВО</button>
+      <button type="button" id="btn-pause-settings" class="btn-ghost">НАСТРОЙКИ</button>
+      <button type="button" id="btn-pause-modules" class="btn-ghost">КАТАЛОГ МОДУЛЕЙ [B]</button>
+      <button type="button" id="btn-pause-codex" class="btn-ghost">КОДЕКС</button>
+      <button type="button" id="btn-pause-mainmenu" class="btn-ghost">В ГЛАВНОЕ МЕНЮ</button>
+    </div>
+  </dialog>
+
+  <!-- Settings Modal -->
+  <dialog id="settings-dialog" aria-labelledby="settings-heading">
+    <div class="modal-eyebrow">КОНФИГУРАЦИЯ ЯДРА</div>
+    <h2 id="settings-heading" class="modal-title" style="font-size:28px">Настройки</h2>
+    <p class="modal-sub">Изменения применяются мгновенно и сохраняются автоматически.</p>
+
+    <div class="settings-list">
+      <label class="setting-row" for="set-quality">
+        <div class="setting-info">
+          <span class="setting-title">Режим графики</span>
+          <span class="setting-desc">Слабый ПК (макс. FPS) / Мощный ПК (ультра частицы и сетка)</span>
+        </div>
+        <div class="setting-control">
+          <select id="set-quality" class="setting-select">
+            <option value="low">Слабый ПК</option>
+            <option value="medium" selected>Баланс</option>
+            <option value="high">Мощный ПК</option>
+          </select>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-gpu">
+        <div class="setting-info">
+          <span class="setting-title">Аппаратное ускорение GPU</span>
+          <span class="setting-desc">WebGL шейдеры для сетки, туманности и частиц (<span id="gpu-backend-label">проверка...</span>)</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-gpu" checked>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-fps">
+        <div class="setting-info">
+          <span class="setting-title">Счетчик FPS и GPU</span>
+          <span class="setting-desc">Показывать нагрузку и бэкенд рендера в левом нижнем углу</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-fps" checked>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-music-vol">
+        <div class="setting-info">
+          <span class="setting-title">Громкость музыки</span>
+          <span class="setting-desc">Процедурный адаптивный синтезатор</span>
+        </div>
+        <div class="setting-control">
+          <input type="range" id="set-music-vol" min="0" max="100" value="60">
+          <span id="val-music-vol" class="setting-val">60%</span>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-sfx-vol">
+        <div class="setting-info">
+          <span class="setting-title">Громкость эффектов (SFX)</span>
+          <span class="setting-desc">Выстрелы, пращи, взрывы, перемотка времени</span>
+        </div>
+        <div class="setting-control">
+          <input type="range" id="set-sfx-vol" min="0" max="100" value="85">
+          <span id="val-sfx-vol" class="setting-val">85%</span>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-shake">
+        <div class="setting-info">
+          <span class="setting-title">Тряска камеры</span>
+          <span class="setting-desc">Динамическая отдача при взрывах и попаданиях</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-shake" checked>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-trajectory">
+        <div class="setting-info">
+          <span class="setting-title">Предпросмотр грави-дуги</span>
+          <span class="setting-desc">Пунктирная линия искривления прицела возле черных дыр</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-trajectory" checked>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-telemetry">
+        <div class="setting-info">
+          <span class="setting-title">Векторы телеметрии ИИ [V]</span>
+          <span class="setting-desc">Отображать розу оценки угроз в режиме ИИ-автопилота</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-telemetry" checked>
+        </div>
+      </label>
+    </div>
+
+    <div class="cta-row settings-footer">
+      <button type="button" id="btn-close-settings" class="btn-primary" autofocus>ГОТОВО</button>
+      <button type="button" id="btn-reset-records" class="btn-ghost btn-danger">Сбросить рекорды</button>
+    </div>
+  </dialog>
+
+  <!-- Roguelike Quantum Augmentation Modal -->
+  <dialog id="upgrade-dialog" aria-labelledby="upg-heading">
+    <div class="modal-eyebrow">КВАНТОВАЯ ЭВОЛЮЦИЯ ЯДРА</div>
+    <h2 id="upg-heading" class="modal-title" style="font-size:28px">Выберите модуль сингулярности</h2>
+    <p class="modal-sub">Нажмите на карточку или клавиши <strong>[1]</strong>–<strong>[4]</strong>. На максимальном уровне модуль пробуждает уникальную Апекс-Эволюцию.</p>
+    <div id="upgrade-stats-bar" class="upgrade-stats-bar"></div>
+    <div id="upgrade-cards" class="upgrade-grid"></div>
+    <div class="cta-row upgrade-footer">
+      <button type="button" id="btn-upgrade-reroll" class="btn-ghost">Перебросить (3) [R]</button>
+    </div>
+  </dialog>
+
+  <!-- Physics & Enemy Codex Modal -->
+  <dialog id="codex-dialog" aria-labelledby="codex-heading">
+    <div class="modal-eyebrow">ТАКТИЧЕСКИЙ СПРАВОЧНИК</div>
+    <h2 id="codex-heading" class="modal-title" style="font-size:28px">Законы Гравитационной Арены</h2>
+    <div class="controls-grid">
+      <div class="ctrl-card">
+        <span class="ctrl-key">Орбитальная Праща</span>
+        <p>Пропустите свой выстрел по касательной к внутреннему кольцу Черной дыры — он ускорится, станет фиолетовым, пробьет цели насквозь и нанесет 2.2× урона!</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">Захват Импульса</span>
+        <p>Вражеские пули, искривленные вашей сингулярностью на >25°, окрашиваются в золотой цвет и бьют самих врагов, заряжая ваш щит.</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">Обход Щита «Эгиды»</span>
+        <p>Штурмовики «Эгида» отражают лобовой огонь. Поставьте черную дыру у них за спиной — и ваши пули сами обогнут щит по дуге!</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">Аннигиляция и [E]</span>
+        <p>Сталкивайте врагов лбами внутри воронки для взаимной аннигиляции или нажимайте <strong>[E]</strong> для принудительного взрыва Сверхновой.</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">Белая дыра [R]</span>
+        <p>Клавиша <strong>[R]</strong> (или Shift+ПКМ) переключает гравитацию на отталкивающую Белую дыру — идеальный щит от роя и пулевого шторма.</p>
+      </div>
+      <div class="ctrl-card">
+        <span class="ctrl-key">Боссы каждые 5 волн</span>
+        <p>На 5-й волне пробуждается многосегментный <strong>Кронос-Левиафан</strong>, а на 10-й — бинарная система <strong>Архонт Пустоты</strong>.</p>
+      </div>
+    </div>
+    <div class="cta-row">
+      <button type="button" id="btn-close-codex" class="btn-primary" autofocus>Вернуться</button>
+    </div>
+  </dialog>
+
+  <!-- Full Modules Catalog Modal -->
+  <dialog id="modules-dialog" aria-labelledby="modules-heading">
+    <div class="modal-eyebrow">РЕЕСТР КВАНТОВЫХ АУГМЕНТАЦИЙ</div>
+    <h2 id="modules-heading" class="modal-title" style="font-size:28px">Каталог модулей</h2>
+    <p id="modules-count-sub" class="modal-sub">Все 100 модулей ядра. В бою из них случайно выпадают по 4 варианта при повышении уровня.</p>
+
+    <div class="catalog-search-row">
+      <input type="search" id="modules-search" class="catalog-search-input" placeholder="Поиск модуля по названию, тегу или эффекту..." autocomplete="off">
+    </div>
+
+    <div class="catalog-filters" role="group" aria-label="Фильтр модулей">
+      <button type="button" class="cat-btn active" data-cat="all" aria-pressed="true">ВСЕ</button>
+      <button type="button" class="cat-btn" data-cat="aura" aria-pressed="false">АУРЫ</button>
+      <button type="button" class="cat-btn" data-cat="tank" aria-pressed="false">ТАНК И ЗАЩИТА</button>
+      <button type="button" class="cat-btn" data-cat="orbit" aria-pressed="false">ОРБИТА И ДЫРЫ</button>
+      <button type="button" class="cat-btn" data-cat="weapon" aria-pressed="false">ОРУДИЕ</button>
+      <button type="button" class="cat-btn" data-cat="chrono" aria-pressed="false">ХРОНО И СИНЕРГИЯ</button>
+    </div>
+
+    <div id="modules-catalog-grid" class="catalog-grid"></div>
+
+    <div class="cta-row">
+      <button type="button" id="btn-close-modules" class="btn-primary" autofocus>Вернуться</button>
+    </div>
+  </dialog>
+
+  <!-- Game Over Summary Modal -->
+  <dialog id="gameover-dialog" aria-labelledby="go-heading">
+    <div class="modal-eyebrow">КВАНТОВЫЙ КОЛЛАПС КОРПУСА</div>
+    <h2 id="go-heading" class="modal-title" style="font-size:32px">Миссия завершена</h2>
+    <div id="go-record-badge" class="record-celebration" hidden>НОВЫЙ АБСОЛЮТНЫЙ РЕКОРД!</div>
+    <div class="stats-grid">
+      <div class="stat-box"><div id="go-score" class="val">0</div><div class="lbl">Итоговый счет</div></div>
+      <div class="stat-box"><div id="go-best" class="val">0</div><div class="lbl">Лучший рекорд</div></div>
+      <div class="stat-box"><div id="go-wave" class="val">1</div><div class="lbl">Достигнута волна</div></div>
+      <div class="stat-box"><div id="go-kills" class="val">0</div><div class="lbl">Уничтожено целей</div></div>
+      <div class="stat-box"><div id="go-max-combo" class="val">×1.0</div><div class="lbl">Макс. резонанс</div></div>
+      <div class="stat-box"><div id="go-evolutions" class="val">0</div><div class="lbl">Апекс-эволюций</div></div>
+      <div class="stat-box"><div id="go-slingshots" class="val">0</div><div class="lbl">Орбитальных пращей</div></div>
+      <div class="stat-box"><div id="go-hijacks" class="val">0</div><div class="lbl">Перехватов пуль</div></div>
+    </div>
+    <div id="go-build-section" class="go-build-section">
+      <div class="section-label">СОБРАННАЯ КОНФИГУРАЦИЯ ЯДРА</div>
+      <div id="go-build-list" class="upgrade-pills"></div>
+    </div>
+    <div class="cta-row">
+      <button type="button" id="btn-restart" class="btn-primary" autofocus>НОВЫЙ ЗАПУСК</button>
+      <button type="button" id="btn-restart-ai" class="btn-secondary">ЗАПУСТИТЬ ИИ-ПИЛОТА</button>
+      <button type="button" id="btn-go-mainmenu" class="btn-ghost">ГЛАВНОЕ МЕНЮ</button>
+    </div>
+  </dialog>
+
+  <script src="js/physics.js"></script>
+  <script src="js/gpu.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/upgrades.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/autopilot.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
