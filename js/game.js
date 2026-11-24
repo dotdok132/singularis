@@ -158,7 +158,9 @@ window.SG = window.SG || {};
         sfxVol: 85,
         screenShake: true,
         trajectoryPreview: true,
-        aiTelemetry: true
+        aiTelemetry: true,
+        touchScale: 115,
+        touchOpacity: 85
       };
       try {
         const raw = localStorage.getItem('singularis_settings');
@@ -185,6 +187,13 @@ window.SG = window.SG || {};
       this.audio.setMusicVolume((this.settings.musicVol || 0) / 100);
       this.audio.setSfxVolume((this.settings.sfxVol || 0) / 100);
       this.autopilot.showTelemetry = !!this.settings.aiTelemetry;
+      const touchEl = document.getElementById('touch-controls');
+      if (touchEl) {
+        const scale = Math.max(80, Math.min(160, Number(this.settings.touchScale) || 115)) / 100;
+        const opacity = Math.max(30, Math.min(100, Number(this.settings.touchOpacity) || 85)) / 100;
+        touchEl.style.setProperty('--touch-scale', String(scale));
+        touchEl.style.setProperty('--touch-opacity', String(opacity));
+      }
       this.applyQualitySettings();
     }
 
@@ -326,9 +335,8 @@ window.SG = window.SG || {};
         this.player.triggerDash(this.touchInput.moveX, this.touchInput.moveY, this.bounds, this.particles, this.audio, this.grid, this);
       });
       bindTap('touch-well', () => {
-        const target = this.findNearestEnemy(this.player.x, this.player.y);
-        const wx = target ? target.x : (this.player.x + Math.cos(this.player.aimAngle) * 180);
-        const wy = target ? target.y : (this.player.y + Math.sin(this.player.aimAngle) * 180);
+        const wx = this.player.x + Math.cos(this.player.aimAngle) * 180;
+        const wy = this.player.y + Math.sin(this.player.aimAngle) * 180;
         this.spawnGravityWell(wx, wy, this.repulsorMode);
       });
       bindTap('touch-detonate', () => this.detonateAllWells());
@@ -337,6 +345,35 @@ window.SG = window.SG || {};
         this.repulsorMode = !this.repulsorMode;
         this.updateHUD();
       });
+
+      // Tap / drag on canvas to aim & place gravity wells directly
+      if (this.canvas) {
+        this.canvas.addEventListener('touchstart', (e) => {
+          if (this.state !== 'playing') return;
+          const t = e.changedTouches[0];
+          if (!t) return;
+          e.preventDefault();
+          this.audio.init();
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(() => {});
+          }
+          const rect = this.canvas.getBoundingClientRect();
+          const x = t.clientX - rect.left;
+          const y = t.clientY - rect.top;
+          this.mouse.x = x;
+          this.mouse.y = y;
+          this.spawnGravityWell(x, y, this.repulsorMode);
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+          if (this.state !== 'playing') return;
+          const t = e.changedTouches[0];
+          if (!t) return;
+          const rect = this.canvas.getBoundingClientRect();
+          this.mouse.x = t.clientX - rect.left;
+          this.mouse.y = t.clientY - rect.top;
+        }, { passive: true });
+      }
     }
 
     initStars(count = 85) {
@@ -448,6 +485,10 @@ window.SG = window.SG || {};
       const shakeCb = document.getElementById('set-shake');
       const trajCb = document.getElementById('set-trajectory');
       const telCb = document.getElementById('set-telemetry');
+      const touchScaleSlider = document.getElementById('set-touch-scale');
+      const touchScaleVal = document.getElementById('val-touch-scale');
+      const touchOpacitySlider = document.getElementById('set-touch-opacity');
+      const touchOpacityVal = document.getElementById('val-touch-opacity');
 
       if (qSel) qSel.value = this.settings.quality;
       if (gpuCb) {
@@ -462,6 +503,10 @@ window.SG = window.SG || {};
       if (shakeCb) shakeCb.checked = !!this.settings.screenShake;
       if (trajCb) trajCb.checked = !!this.settings.trajectoryPreview;
       if (telCb) telCb.checked = !!this.settings.aiTelemetry;
+      if (touchScaleSlider) touchScaleSlider.value = String(this.settings.touchScale || 115);
+      if (touchScaleVal) touchScaleVal.textContent = `${this.settings.touchScale || 115}%`;
+      if (touchOpacitySlider) touchOpacitySlider.value = String(this.settings.touchOpacity || 85);
+      if (touchOpacityVal) touchOpacityVal.textContent = `${this.settings.touchOpacity || 85}%`;
       this.updateQualityUI();
     }
 
@@ -814,6 +859,26 @@ window.SG = window.SG || {};
           this.settings.aiTelemetry = telCb.checked;
           this.applySettings();
           this.saveSettings();
+        });
+      }
+
+      const touchScaleSlider = document.getElementById('set-touch-scale');
+      if (touchScaleSlider) {
+        touchScaleSlider.addEventListener('input', () => {
+          this.settings.touchScale = Number(touchScaleSlider.value);
+          this.applySettings();
+          this.saveSettings();
+          this.syncSettingsUI();
+        });
+      }
+
+      const touchOpacitySlider = document.getElementById('set-touch-opacity');
+      if (touchOpacitySlider) {
+        touchOpacitySlider.addEventListener('input', () => {
+          this.settings.touchOpacity = Number(touchOpacitySlider.value);
+          this.applySettings();
+          this.saveSettings();
+          this.syncSettingsUI();
         });
       }
 
@@ -2083,15 +2148,9 @@ window.SG = window.SG || {};
         const moveY = Math.abs(this.touchInput.moveY) > 0.05 ? this.touchInput.moveY : kbMoveY;
         let aimX = this.mouse.x;
         let aimY = this.mouse.y;
-        if (this.isTouchDevice && (this.touchInput.firing || Math.abs(moveX) > 0.05 || Math.abs(moveY) > 0.05)) {
-          const target = this.findNearestEnemy(this.player.x, this.player.y);
-          if (target) {
-            aimX = target.x;
-            aimY = target.y;
-          } else if (Math.hypot(moveX, moveY) > 0.05) {
-            aimX = this.player.x + moveX * 220;
-            aimY = this.player.y + moveY * 220;
-          }
+        if (this.isTouchDevice && Math.hypot(moveX, moveY) > 0.05 && aimX === 0 && aimY === 0) {
+          aimX = this.player.x + moveX * 220;
+          aimY = this.player.y + moveY * 220;
         }
         input = {
           moveX,

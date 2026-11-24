@@ -87,6 +87,13 @@
     </div>
   </div>
 
+  <!-- Portrait Orientation Prompt (Mobile) -->
+  <div id="rotate-overlay" class="rotate-overlay" aria-live="polite">
+    <div class="rotate-icon" aria-hidden="true">📱↻</div>
+    <div class="rotate-title">ПОВЕРНИТЕ ЭКРАН</div>
+    <div class="rotate-sub">Для комфортной игры переверните телефон горизонтально</div>
+  </div>
+
   <!-- Main Menu Modal (Native <dialog>) -->
   <dialog id="title-dialog" aria-labelledby="title-heading">
     <div class="modal-eyebrow">ТАКТИЧЕСКАЯ РЕЛЯТИВИСТСКАЯ ПЕСОЧНИЦА • ROGUELIKE</div>
@@ -268,6 +275,28 @@
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-telemetry" checked>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-touch-scale">
+        <div class="setting-info">
+          <span class="setting-title">Размер кнопок (телефон)</span>
+          <span class="setting-desc">Масштаб сенсорных кнопок и джойстика на экране</span>
+        </div>
+        <div class="setting-control">
+          <input type="range" id="set-touch-scale" min="80" max="160" step="5" value="115">
+          <span id="val-touch-scale" class="setting-val">115%</span>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-touch-opacity">
+        <div class="setting-info">
+          <span class="setting-title">Прозрачность кнопок (телефон)</span>
+          <span class="setting-desc">Видимость сенсорного управления поверх поля боя</span>
+        </div>
+        <div class="setting-control">
+          <input type="range" id="set-touch-opacity" min="30" max="100" step="5" value="85">
+          <span id="val-touch-opacity" class="setting-val">85%</span>
         </div>
       </label>
     </div>
