@@ -4,9 +4,18 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v1.5.1';
+  SG.VERSION = 'v2.0.0';
 
   const WORLD_SIZE = 3200;
+  const DUNGEON_SIZE = 2200;
+
+  const ANOMALY_TIERS = {
+    1: { color: '#00f0ff', startWave: 1, wavesTotal: 3, hasBoss: false, names: ['ПЕРЕДОВОЙ СБОЙ', 'ОСКОЛОК РОЯ', 'ВНЕШНИЙ ПРОРЫВ'] },
+    2: { color: '#c06cff', startWave: 3, wavesTotal: 4, hasBoss: false, names: ['ПУЛЬСАРНЫЙ РАЗЛОМ', 'ЩЕЛЬ ЭНТРОПИИ', 'ИСКАЖЕНИЕ'] },
+    3: { color: '#ffb838', startWave: 5, wavesTotal: 4, hasBoss: true, names: ['ГНЕЗДО ЛЕВИАФАНА', 'КРОНОС-ВИХРЬ', 'ЯДРО ТРЕВОГИ'] },
+    4: { color: '#ff3b6b', startWave: 8, wavesTotal: 4, hasBoss: true, names: ['АЛЫЙ КОЛЛАПС', 'ГОРИЗОНТ СОБЫТИЙ', 'БАГРОВАЯ ПЕТЛЯ'] },
+    5: { color: '#ff6be6', startWave: 12, wavesTotal: 5, hasBoss: true, names: ['ТРОН АРХОНТА', 'КОРОНА СИНГУЛЯРНОСТИ', 'КРАЙ ПУСТОТЫ'] }
+  };
 
   const DIALOG_IDS = [
     'title-dialog',
@@ -129,6 +138,20 @@ window.SG = window.SG || {};
       this.maxCombo = 1.0;
       this._buildDirty = true;
       this.waveSubtitle = '';
+      this.waveBannerTitle = '';
+      this.waveBannerColor = null;
+
+      // Overworld / Base / Anomaly Dungeon State
+      this.zone = 'overworld'; // 'overworld' | 'anomaly'
+      this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
+      this.anomalies = [];
+      this.activeAnomaly = null;
+      this.anomalyCleared = false;
+      this.dungeonWaveIndex = 0;
+      this.dungeonWavesTotal = 0;
+      this.exitPortal = null;
+      this.overworldPos = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5 + 150 };
+      this.inBaseZone = false;
       this._lastTouchTime = 0;
       this._upgradeGuardUntil = 0;
       const hasCoarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
@@ -212,6 +235,7 @@ window.SG = window.SG || {};
         detonate: document.getElementById('hud-detonate'),
         wellCd: document.getElementById('hud-well-cd'),
         buildStrip: document.getElementById('hud-build-strip'),
+        returnBtn: document.getElementById('btn-hud-return'),
         polBtn: document.getElementById('btn-hud-polarity'),
         muteBtn: document.getElementById('btn-hud-mute'),
         menuBtn: document.getElementById('btn-hud-menu'),
@@ -758,7 +782,18 @@ window.SG = window.SG || {};
 
     resetRun(startImmediately = true) {
       this.cancelUpgradeAnim();
-      this.player = new SG.Player(this.bounds.width * 0.5, this.bounds.height * 0.5);
+      this.zone = 'overworld';
+      this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
+      this.activeAnomaly = null;
+      this.anomalyCleared = false;
+      this.dungeonWaveIndex = 0;
+      this.dungeonWavesTotal = 0;
+      this.exitPortal = null;
+      this.inBaseZone = false;
+
+      this.initOverworldEntities();
+      this.player = new SG.Player(this.base.x, this.base.y + 145);
+      this.overworldPos = { x: this.player.x, y: this.player.y };
       this.initLandmarks();
       this.snapCameraToPlayer();
       this.wells = [];
@@ -776,7 +811,9 @@ window.SG = window.SG || {};
       this.waveQueue = [];
       this.waveSpawnTimer = 0;
       this.waveBannerTimer = 0;
+      this.waveBannerTitle = '';
       this.waveSubtitle = '';
+      this.waveBannerColor = null;
 
       this.level = 1;
       this.xp = 0;
@@ -791,7 +828,8 @@ window.SG = window.SG || {};
         kills: 0,
         slingshots: 0,
         hijacks: 0,
-        annihilations: 0
+        annihilations: 0,
+        anomaliesCleared: 0
       };
 
       this.screenShake = 0;
@@ -802,7 +840,10 @@ window.SG = window.SG || {};
 
       if (startImmediately) {
         this.state = 'playing';
-        this.startWave(1);
+        this.waveBannerTitle = 'ОТКРЫТЫЙ МИР // БАЗА';
+        this.waveSubtitle = 'ЗАЛЕТИТЕ В ЛЮБУЮ АНОМАЛИЮ ДЛЯ ЗАЧИСТКИ';
+        this.waveBannerColor = '#00f0ff';
+        this.waveBannerTimer = 3.2;
         this.closeAllDialogs();
       }
       this.updateHUD();
@@ -953,6 +994,226 @@ window.SG = window.SG || {};
       }
     }
 
+    initOverworldEntities() {
+      this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
+      this.anomalies = [];
+      const tiers = [1, 1, 2, 2, 3, 4, 5];
+      for (let i = 0; i < tiers.length; i++) {
+        this.spawnNewAnomaly(tiers[i], i, tiers.length);
+      }
+    }
+
+    spawnNewAnomaly(tier = 1, slotIdx = null, slotCount = null) {
+      const cfg = ANOMALY_TIERS[tier] || ANOMALY_TIERS[1];
+      const pad = 230;
+      const minD = tier === 1 ? 560 : (tier === 2 ? 820 : 1040);
+      const maxD = tier === 1 ? 820 : (tier === 2 ? 1100 : 1420);
+      let ax = this.base.x + 650;
+      let ay = this.base.y;
+      for (let attempt = 0; attempt < 36; attempt++) {
+        const baseAng = slotIdx !== null && slotCount
+          ? (slotIdx / slotCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.65
+          : Math.random() * Math.PI * 2;
+        const dist = minD + Math.random() * (maxD - minD);
+        const cx = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.x + Math.cos(baseAng) * dist));
+        const cy = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.y + Math.sin(baseAng) * dist));
+        const tooCloseToBase = Math.hypot(cx - this.base.x, cy - this.base.y) < 460;
+        const tooCloseToOther = this.anomalies.some(other => Math.hypot(cx - other.x, cy - other.y) < 420);
+        if (!tooCloseToBase && !tooCloseToOther) {
+          ax = cx;
+          ay = cy;
+          break;
+        }
+        ax = cx;
+        ay = cy;
+      }
+      const name = cfg.names[Math.floor(Math.random() * cfg.names.length)];
+      const anomaly = {
+        id: 'anom_' + Math.random().toString(36).slice(2, 9),
+        tier,
+        name,
+        color: cfg.color,
+        startWave: cfg.startWave,
+        wavesTotal: cfg.wavesTotal,
+        hasBoss: cfg.hasBoss,
+        x: ax,
+        y: ay,
+        radius: 54 + tier * 3,
+        cleared: false,
+        enterProgress: 0
+      };
+      this.anomalies.push(anomaly);
+      return anomaly;
+    }
+
+    enterAnomaly(anomaly) {
+      if (!anomaly || anomaly.cleared || !this.player) return;
+      const dx = this.base.x - anomaly.x;
+      const dy = this.base.y - anomaly.y;
+      const d = Math.hypot(dx, dy) || 1;
+      this.overworldPos = {
+        x: Math.max(80, Math.min(WORLD_SIZE - 80, anomaly.x + (dx / d) * 145)),
+        y: Math.max(80, Math.min(WORLD_SIZE - 80, anomaly.y + (dy / d) * 145))
+      };
+
+      anomaly.enterProgress = 0;
+      this.zone = 'anomaly';
+      this.activeAnomaly = anomaly;
+      this.anomalyCleared = false;
+      this.exitPortal = null;
+      this.inBaseZone = false;
+      this.bounds = { width: DUNGEON_SIZE, height: DUNGEON_SIZE };
+
+      this.wells = [];
+      this.enemies = [];
+      this.bullets = [];
+      this.pickups = [];
+      this.particles.clear();
+      this.player.history = [];
+      this.player.clones = [];
+      this.player.afterimages = [];
+      this.player.x = DUNGEON_SIZE * 0.5;
+      this.player.y = DUNGEON_SIZE * 0.5;
+      this.player.vx = 0;
+      this.player.vy = 0;
+      this.player.invulnTimer = Math.max(this.player.invulnTimer, 1.2);
+
+      this.initLandmarks();
+      this.snapCameraToPlayer();
+
+      this.dungeonWaveIndex = 1;
+      this.dungeonWavesTotal = anomaly.wavesTotal;
+      this.startWave(anomaly.startWave);
+      this.waveBannerTitle = `АНОМАЛИЯ: ${anomaly.name}`;
+      this.waveSubtitle = `УРОВЕНЬ ${anomaly.tier} • ВОЛНА 1/${anomaly.wavesTotal}`;
+      this.waveBannerColor = anomaly.color;
+      this.waveBannerTimer = 3.0;
+      this.particles.addShockwave(this.player.x, this.player.y, 170, anomaly.color, 0.45, 3);
+      this.audio.playLevelUp();
+      this.updateHUD();
+    }
+
+    completeAnomaly() {
+      if (this.zone !== 'anomaly' || this.anomalyCleared) return;
+      this.anomalyCleared = true;
+      const anom = this.activeAnomaly;
+      const tier = anom ? anom.tier : 1;
+      if (anom) anom.cleared = true;
+      this.stats.anomaliesCleared = (this.stats.anomaliesCleared || 0) + 1;
+
+      // Vacuum remaining dungeon XP & reward player
+      for (let i = 0; i < this.pickups.length; i++) {
+        this.pickups[i].autoCollect = true;
+      }
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + Math.round(this.player.maxHp * 0.35));
+      this.player.shield = this.player.maxShield;
+      this.player.chrono = this.player.maxChrono;
+
+      const scoreBonus = 1500 * tier;
+      this.score += scoreBonus;
+      const xpBonus = Math.round(this.xpNext * 0.75 + 80 * tier);
+
+      // Spawn Extraction Portal near player (inside dungeon bounds)
+      const pAng = Math.random() * Math.PI * 2;
+      const px = Math.max(120, Math.min(this.bounds.width - 120, this.player.x + Math.cos(pAng) * 150));
+      const py = Math.max(120, Math.min(this.bounds.height - 120, this.player.y + Math.sin(pAng) * 150));
+      this.exitPortal = {
+        x: px,
+        y: py,
+        radius: 58,
+        progress: 0,
+        graceTimer: 0.65
+      };
+
+      this.waveBannerTitle = 'АНОМАЛИЯ ЗАЧИЩЕНА!';
+      this.waveSubtitle = 'ЗАЛЕТИТЕ В ПОРТАЛ ИЛИ НАЖМИТЕ [T] ДЛЯ ВОЗВРАТА';
+      this.waveBannerColor = '#22ffa6';
+      this.waveBannerTimer = 3.6;
+
+      this.particles.addShockwave(px, py, 140, '#22ffa6', 0.5, 3);
+      this.particles.addText(this.player.x, this.player.y - 36, `+${scoreBonus} ОЧКОВ • +${xpBonus} XP`, '#22ffa6', 1.28, 1.8);
+      this.audio.playLevelUp();
+      this.gainXP(xpBonus);
+      this.updateHUD();
+    }
+
+    exitAnomalyToOverworld(toBase = false) {
+      this.zone = 'overworld';
+      this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
+      this.activeAnomaly = null;
+      this.anomalyCleared = false;
+      this.dungeonWaveIndex = 0;
+      this.dungeonWavesTotal = 0;
+      this.exitPortal = null;
+
+      this.wells = [];
+      this.enemies = [];
+      this.bullets = [];
+      this.pickups = [];
+      this.waveQueue = [];
+      this.particles.clear();
+
+      if (this.player) {
+        this.player.history = [];
+        this.player.clones = [];
+        this.player.afterimages = [];
+        if (toBase) {
+          this.player.x = this.base.x;
+          this.player.y = this.base.y + 140;
+        } else {
+          this.player.x = this.overworldPos.x;
+          this.player.y = this.overworldPos.y;
+        }
+        this.player.vx = 0;
+        this.player.vy = 0;
+      }
+
+      this.initLandmarks();
+      this.snapCameraToPlayer();
+
+      // Replenish anomalies so the open world always stays alive with challenges
+      const uncleared = this.anomalies.filter(a => !a.cleared).length;
+      if (uncleared < 5) {
+        this.anomalies = this.anomalies.filter(a => !a.cleared);
+        const needed = 7 - this.anomalies.length;
+        for (let i = 0; i < needed; i++) {
+          const t = Math.min(5, 1 + ((this.stats.anomaliesCleared + i) % 5));
+          this.spawnNewAnomaly(t);
+        }
+      }
+
+      this.waveBannerTitle = 'ОТКРЫТЫЙ МИР';
+      this.waveSubtitle = 'БАЗА АКТИВНА • ВЫБЕРИТЕ СЛЕДУЮЩУЮ АНОМАЛИЮ';
+      this.waveBannerColor = '#00f0ff';
+      this.waveBannerTimer = 2.8;
+      if (this.player) {
+        this.particles.addShockwave(this.player.x, this.player.y, 130, '#00f0ff', 0.4, 2.5);
+      }
+      this.updateHUD();
+    }
+
+    returnToBase() {
+      if (this.state !== 'playing' || !this.player) return;
+      if (this.zone === 'anomaly') {
+        if (this.anomalyCleared) {
+          this.exitAnomalyToOverworld(true);
+        } else {
+          this.particles.addText(this.player.x, this.player.y - 30, 'ЗАЧИСТИТЕ АНОМАЛИЮ ПЕРЕД ВЫХОДОМ!', '#ff6b8b', 1.05, 1.3);
+        }
+        return;
+      }
+      this.player.history = [];
+      this.player.x = this.base.x;
+      this.player.y = this.base.y + 140;
+      this.player.vx = 0;
+      this.player.vy = 0;
+      this.snapCameraToPlayer();
+      this.particles.addShockwave(this.player.x, this.player.y, 120, '#22ffa6', 0.4, 2.5);
+      this.particles.addText(this.player.x, this.player.y - 28, 'ВОЗВРАТ НА БАЗУ', '#22ffa6', 1.15, 1.3);
+      this.audio.playRewind();
+      this.updateHUD();
+    }
+
     handleResize() {
       const preset = this.getPreset();
       this.viewport.width = window.innerWidth;
@@ -1054,6 +1315,8 @@ window.SG = window.SG || {};
           this.player.triggerRewind(this.particles, this.audio, this.grid, this);
         } else if (e.code === 'KeyE' && this.state === 'playing') {
           this.detonateAllWells();
+        } else if (e.code === 'KeyT' && this.state === 'playing') {
+          this.returnToBase();
         } else if (e.code === 'KeyB') {
           this.toggleModulesCatalog();
         } else if (e.code === 'KeyH' || e.key === '?') {
@@ -1202,6 +1465,13 @@ window.SG = window.SG || {};
       document.getElementById('btn-hud-menu').addEventListener('click', () => {
         if (this.state === 'playing') this.openPauseMenu();
       });
+
+      const returnBtn = document.getElementById('btn-hud-return');
+      if (returnBtn) {
+        returnBtn.addEventListener('click', () => {
+          this.returnToBase();
+        });
+      }
 
       document.getElementById('btn-hud-polarity').addEventListener('click', () => {
         this.repulsorMode = !this.repulsorMode;
@@ -2039,6 +2309,10 @@ window.SG = window.SG || {};
 
     startWave(waveNum) {
       this.wave = waveNum;
+      this.waveBannerTitle = this.zone === 'anomaly'
+        ? `ВОЛНА ${this.dungeonWaveIndex}/${this.dungeonWavesTotal}`
+        : `ВОЛНА ${waveNum}`;
+      this.waveBannerColor = this.activeAnomaly ? this.activeAnomaly.color : null;
       this.waveBannerTimer = 2.8;
       this.waveQueue = [];
 
@@ -2677,7 +2951,7 @@ window.SG = window.SG || {};
 
       document.getElementById('go-score').textContent = this.score.toLocaleString('ru-RU');
       document.getElementById('go-best').textContent = this.bestScore.toLocaleString('ru-RU');
-      document.getElementById('go-wave').textContent = String(this.wave);
+      document.getElementById('go-wave').textContent = `${this.stats.anomaliesCleared || 0} / В.${this.wave}`;
       document.getElementById('go-kills').textContent = String(this.stats.kills);
       document.getElementById('go-slingshots').textContent = String(this.stats.slingshots);
       document.getElementById('go-hijacks').textContent = String(this.stats.hijacks);
@@ -2998,20 +3272,78 @@ window.SG = window.SG || {};
         }
       }
 
-      // Wave Spawner
       if (this.waveBannerTimer > 0) this.waveBannerTimer -= dt;
-      if (this.waveQueue.length > 0) {
-        this.waveSpawnTimer -= worldDt;
-        const maxActive = Math.min(48, 18 + this.wave * 2);
-        if (this.waveSpawnTimer <= 0 && this.enemies.length < maxActive) {
-          const batch = this.wave >= 16 ? 3 : (this.wave >= 8 ? 2 : 1);
-          for (let bi = 0; bi < batch && this.waveQueue.length > 0 && this.enemies.length < maxActive; bi++) {
-            this.spawnFromWaveQueue();
-          }
-          this.waveSpawnTimer = Math.max(0.24, 0.68 - this.wave * 0.022);
+
+      if (this.zone === 'overworld') {
+        // Peaceful Overworld: Base repair dock & Anomaly Dungeon entry portals
+        const distBase = Math.hypot(this.player.x - this.base.x, this.player.y - this.base.y);
+        const wasInBase = this.inBaseZone;
+        this.inBaseZone = distBase <= this.base.repairRadius;
+        if (this.inBaseZone) {
+          this.player.hp = Math.min(this.player.maxHp, this.player.hp + 38 * dt);
+          this.player.shield = Math.min(this.player.maxShield, this.player.shield + 65 * dt);
+          this.player.chrono = Math.min(this.player.maxChrono, this.player.chrono + 55 * dt);
+          this.player.dashCooldown = Math.max(0, this.player.dashCooldown - dt * 1.5);
+          this.player.rewindCooldown = Math.max(0, this.player.rewindCooldown - dt * 2.0);
+          this.player.detonateCooldown = Math.max(0, this.player.detonateCooldown - dt * 2.0);
         }
-      } else if (this.enemies.length === 0) {
-        this.startWave(this.wave + 1);
+        if (this.inBaseZone !== wasInBase) {
+          this.updateHUD();
+        }
+
+        for (let i = 0; i < this.anomalies.length; i++) {
+          const a = this.anomalies[i];
+          if (a.cleared) continue;
+          const distA = Math.hypot(this.player.x - a.x, this.player.y - a.y);
+          if (distA < 700) {
+            this.grid.applyRadialForce(a.x, a.y, -110 * dt, a.radius * 2.3, 180);
+          }
+          if (distA <= a.radius + 14) {
+            a.enterProgress = Math.min(1, a.enterProgress + dt / 1.1);
+            if (a.enterProgress >= 1) {
+              this.enterAnomaly(a);
+              return;
+            }
+          } else {
+            a.enterProgress = Math.max(0, a.enterProgress - dt * 1.8);
+          }
+        }
+      } else {
+        // Anomaly Dungeon Combat Loop
+        if (!this.anomalyCleared) {
+          if (this.waveQueue.length > 0) {
+            this.waveSpawnTimer -= worldDt;
+            const maxActive = Math.min(48, 18 + this.wave * 2);
+            if (this.waveSpawnTimer <= 0 && this.enemies.length < maxActive) {
+              const batch = this.wave >= 16 ? 3 : (this.wave >= 8 ? 2 : 1);
+              for (let bi = 0; bi < batch && this.waveQueue.length > 0 && this.enemies.length < maxActive; bi++) {
+                this.spawnFromWaveQueue();
+              }
+              this.waveSpawnTimer = Math.max(0.24, 0.68 - this.wave * 0.022);
+            }
+          } else if (this.enemies.length === 0) {
+            if (this.dungeonWaveIndex >= this.dungeonWavesTotal) {
+              this.completeAnomaly();
+            } else {
+              this.dungeonWaveIndex++;
+              this.startWave(this.wave + 1);
+            }
+          }
+        } else if (this.exitPortal) {
+          const ep = this.exitPortal;
+          ep.graceTimer = Math.max(0, ep.graceTimer - dt);
+          this.grid.applyRadialForce(ep.x, ep.y, -90 * dt, ep.radius * 2.0, 140);
+          const distEp = Math.hypot(this.player.x - ep.x, this.player.y - ep.y);
+          if (ep.graceTimer <= 0 && distEp <= ep.radius + 14) {
+            ep.progress = Math.min(1, ep.progress + dt / 0.95);
+            if (ep.progress >= 1) {
+              this.exitAnomalyToOverworld(false);
+              return;
+            }
+          } else {
+            ep.progress = Math.max(0, ep.progress - dt * 1.8);
+          }
+        }
       }
 
       // Update Player Combat Auras (Solar Corona, Cryo-Stasis, Entropy Siphon, Storm Coil, Grav-Repulse)
@@ -4120,7 +4452,18 @@ window.SG = window.SG || {};
 
       if (els.score) els.score.textContent = this.score.toLocaleString('ru-RU');
       if (els.combo) els.combo.textContent = `×${this.combo.toFixed(1)}`;
-      if (els.wave) els.wave.textContent = `ВОЛНА ${this.wave}`;
+      if (els.wave) {
+        if (this.zone === 'overworld') {
+          els.wave.textContent = this.inBaseZone
+            ? 'БАЗА • РЕМОНТ'
+            : `МИР • ЗАЧИЩЕНО: ${this.stats ? (this.stats.anomaliesCleared || 0) : 0}`;
+        } else if (this.anomalyCleared) {
+          els.wave.textContent = 'АНОМАЛИЯ ЗАЧИЩЕНА';
+        } else {
+          const tier = this.activeAnomaly ? this.activeAnomaly.tier : 1;
+          els.wave.textContent = `T${tier} • ВОЛНА ${this.dungeonWaveIndex}/${this.dungeonWavesTotal}`;
+        }
+      }
       if (els.level) els.level.textContent = `УР. ${this.level}`;
 
       if (els.dash) {
@@ -4183,6 +4526,16 @@ window.SG = window.SG || {};
 
       if (els.menuBtn) {
         els.menuBtn.innerHTML = this.isTouchDevice ? 'Пауза' : 'Меню <span class="key-hint">[Esc]</span>';
+      }
+
+      if (els.returnBtn) {
+        const showReturn = (this.zone === 'overworld' && !this.inBaseZone) || (this.zone === 'anomaly' && this.anomalyCleared);
+        els.returnBtn.hidden = !showReturn;
+        if (showReturn) {
+          els.returnBtn.innerHTML = this.zone === 'anomaly'
+            ? (this.isTouchDevice ? 'Выход' : 'На базу <span class="key-hint">[T]</span>')
+            : (this.isTouchDevice ? 'На базу' : 'На базу <span class="key-hint">[T]</span>');
+        }
       }
 
       if (els.muteBtn) {
@@ -4368,6 +4721,79 @@ window.SG = window.SG || {};
       // Open-World Arena Hazard Perimeter Barrier
       if (SG.Sprites) {
         SG.Sprites.drawPerimeter(ctx, this.bounds, camX, camY, w, h, nowSec);
+      }
+
+      // Overworld Base, Anomaly Rifts & Navigation Compasses (or Dungeon Exit Portal)
+      if (this.zone === 'overworld' && SG.Sprites) {
+        SG.Sprites.drawBase(ctx, this.base, nowSec, this.inBaseZone, useSprites);
+        for (let i = 0; i < this.anomalies.length; i++) {
+          const a = this.anomalies[i];
+          if (a.x + 220 < camX || a.x - 220 > camX + w || a.y + 220 < camY || a.y - 220 > camY + h) continue;
+          const isNear = !!(this.player && Math.hypot(this.player.x - a.x, this.player.y - a.y) < 340);
+          SG.Sprites.drawAnomaly(ctx, a, nowSec, isNear);
+        }
+
+        if (this.state === 'playing' && this.player) {
+          const px = this.player.x;
+          const py = this.player.y;
+          const drawCompass = (tx, ty, col, radiusRing, sizeArrow) => {
+            const dx = tx - px;
+            const dy = ty - py;
+            const d = Math.hypot(dx, dy);
+            if (d <= 280) return;
+            const ang = Math.atan2(dy, dx);
+            const cx = px + Math.cos(ang) * radiusRing;
+            const cy = py + Math.sin(ang) * radiusRing;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(ang);
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.moveTo(sizeArrow, 0);
+            ctx.lineTo(-sizeArrow, sizeArrow * 0.72);
+            ctx.lineTo(-sizeArrow * 0.45, 0);
+            ctx.lineTo(-sizeArrow, -sizeArrow * 0.72);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          };
+
+          if (Math.hypot(this.base.x - px, this.base.y - py) > 340) {
+            drawCompass(this.base.x, this.base.y, '#00f0ff', 68, 7.2);
+          }
+          const nearestAnoms = this.anomalies
+            .filter(a => !a.cleared)
+            .map(a => ({ a, d: Math.hypot(a.x - px, a.y - py) }))
+            .filter(item => item.d > 280)
+            .sort((u, v) => u.d - v.d)
+            .slice(0, 3);
+          for (const item of nearestAnoms) {
+            drawCompass(item.a.x, item.a.y, item.a.color, 58, 5.5);
+          }
+        }
+      } else if (this.zone === 'anomaly' && this.exitPortal && SG.Sprites) {
+        SG.Sprites.drawExitPortal(ctx, this.exitPortal, nowSec);
+        if (this.state === 'playing' && this.player) {
+          const dx = this.exitPortal.x - this.player.x;
+          const dy = this.exitPortal.y - this.player.y;
+          if (Math.hypot(dx, dy) > 220) {
+            const ang = Math.atan2(dy, dx);
+            const cx = this.player.x + Math.cos(ang) * 62;
+            const cy = this.player.y + Math.sin(ang) * 62;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(ang);
+            ctx.fillStyle = '#22ffa6';
+            ctx.beginPath();
+            ctx.moveTo(7, 0);
+            ctx.lineTo(-7, 5);
+            ctx.lineTo(-3, 0);
+            ctx.lineTo(-7, -5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+        }
       }
 
       // Real-time Relativistic Curved Aim Trajectory Preview (batched into 2 paths!)
@@ -4668,14 +5094,16 @@ window.SG = window.SG || {};
 
       if (this.state === 'playing' && this.waveBannerTimer > 0) {
         const t = this.waveBannerTimer;
-        const alpha = Math.min(1, t * 2.2, (2.8 - t) * 3.2 + 0.15);
-        const isBossW = this.wave % 5 === 0;
+        const alpha = Math.min(1, t * 2.2, (3.6 - t) * 3.2 + 0.2);
+        const isBossW = this.zone === 'anomaly' && !this.anomalyCleared && (this.wave % 5 === 0);
+        const accentCol = this.waveBannerColor || (isBossW ? '#ff3b6b' : '#00f0ff');
+        const titleTxt = this.waveBannerTitle || `ВОЛНА ${this.wave}`;
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         const cy = 98;
-        const bw = isBossW ? 440 : 320;
-        ctx.fillStyle = isBossW ? 'rgba(38, 8, 20, 0.86)' : 'rgba(8, 15, 34, 0.82)';
-        ctx.strokeStyle = isBossW ? '#ff3b6b' : '#00f0ff';
+        const bw = isBossW || titleTxt.length > 18 ? 460 : 340;
+        ctx.fillStyle = isBossW ? 'rgba(38, 8, 20, 0.86)' : 'rgba(8, 15, 34, 0.84)';
+        ctx.strokeStyle = accentCol;
         ctx.lineWidth = 1.4;
         ctx.fillRect(w * 0.5 - bw * 0.5, cy - 24, bw, 46);
         ctx.strokeRect(w * 0.5 - bw * 0.5, cy - 24, bw, 46);
@@ -4683,10 +5111,10 @@ window.SG = window.SG || {};
         ctx.textAlign = 'center';
         ctx.font = '800 16px "JetBrains Mono", system-ui, sans-serif';
         ctx.fillStyle = isBossW ? '#ffb838' : '#ffffff';
-        ctx.fillText(`ВОЛНА ${this.wave}`, w * 0.5, cy - 3);
+        ctx.fillText(titleTxt, w * 0.5, cy - 3);
 
         ctx.font = '700 10.5px "JetBrains Mono", system-ui, sans-serif';
-        ctx.fillStyle = isBossW ? '#ff6b8b' : '#7df9ff';
+        ctx.fillStyle = this.waveBannerColor || (isBossW ? '#ff6b8b' : '#7df9ff');
         ctx.fillText(this.waveSubtitle || 'СЕКТОР АКТИВЕН', w * 0.5, cy + 14);
         ctx.restore();
       }
@@ -4787,6 +5215,45 @@ window.SG = window.SG || {};
         }
       }
 
+      // Overworld Base & Anomalies (or Dungeon Exit Portal)
+      if (this.zone === 'overworld') {
+        const bx = mx + this.base.x * scaleX;
+        const by = my + this.base.y * scaleY;
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillRect(bx - 3.5, by - 3.5, 7, 7);
+        ctx.strokeStyle = '#22ffa6';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx - 5.5, by - 5.5, 11, 11);
+
+        for (let i = 0; i < this.anomalies.length; i++) {
+          const a = this.anomalies[i];
+          const ax = mx + a.x * scaleX;
+          const ay = my + a.y * scaleY;
+          if (a.cleared) {
+            ctx.fillStyle = 'rgba(34, 255, 166, 0.35)';
+            ctx.fillRect(ax - 1.5, ay - 1.5, 3, 3);
+          } else {
+            ctx.fillStyle = a.color;
+            ctx.beginPath();
+            ctx.arc(ax, ay, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+          }
+        }
+      } else if (this.exitPortal) {
+        const ex = mx + this.exitPortal.x * scaleX;
+        const ey = my + this.exitPortal.y * scaleY;
+        ctx.fillStyle = '#22ffa6';
+        ctx.beginPath();
+        ctx.arc(ex, ey, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
       // Gravity wells
       for (let i = 0; i < this.wells.length; i++) {
         const w = this.wells[i];
@@ -4846,10 +5313,13 @@ window.SG = window.SG || {};
       // Radar coordinate label
       const col = Math.min(4, Math.max(1, Math.floor((this.player.x / this.bounds.width) * 4) + 1));
       const row = Math.min(4, Math.max(1, Math.floor((this.player.y / this.bounds.height) * 4) + 1));
-      ctx.fillStyle = 'rgba(180, 200, 224, 0.78)';
+      ctx.fillStyle = this.zone === 'anomaly' && this.activeAnomaly ? this.activeAnomaly.color : 'rgba(180, 200, 224, 0.78)';
       ctx.font = '700 9px "JetBrains Mono", system-ui, sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(`SEC ${col}:${row}`, mx + size - 3, my + size + 11);
+      const zoneTag = this.zone === 'anomaly'
+        ? `АНОМАЛИЯ T${this.activeAnomaly ? this.activeAnomaly.tier : 1}`
+        : `МИР • SEC ${col}:${row}`;
+      ctx.fillText(zoneTag, mx + size - 3, my + size + 11);
 
       ctx.restore();
     }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>SINGULARIS — Архитектор Гравитации</title>
-  <link rel="stylesheet" href="styles.css?v=1.5.1">
+  <link rel="stylesheet" href="styles.css?v=2.0.0">
 </head>
 <body>
   <canvas id="gpu-canvas"></canvas>
@@ -49,6 +49,7 @@
     <div class="hud-actions">
       <div class="btn-row">
         <button type="button" id="btn-hud-menu" class="hud-btn">Меню <span class="key-hint">[Esc]</span></button>
+        <button type="button" id="btn-hud-return" class="hud-btn" hidden>На базу <span class="key-hint">[T]</span></button>
         <button type="button" id="btn-hud-polarity" class="hud-btn desktop-only-hud">Черная дыра <span class="key-hint">[R]</span></button>
         <button type="button" id="btn-hud-mute" class="hud-btn">Звук: ВКЛ</button>
         <button type="button" id="btn-hud-modules" class="hud-btn desktop-only-hud">Модули <span class="key-hint">[B]</span></button>
@@ -67,7 +68,7 @@
     </div>
   </header>
   <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
-  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v1.5.1</div>
+  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v2.0.0</div>
 
   <!-- Mobile / Tablet Twin-Stick & Ability Arc Controls -->
   <div id="touch-controls" class="touch-controls" hidden>
@@ -126,7 +127,7 @@
     <div class="modal-eyebrow">ТАКТИЧЕСКАЯ РЕЛЯТИВИСТСКАЯ ПЕСОЧНИЦА • ROGUELIKE</div>
     <h1 id="title-heading" class="modal-title">SINGULARIS: АРХИТЕКТОР ГРАВИТАЦИИ</h1>
     <p class="modal-sub">
-      Искривляйте пространство-время, разгоняйте залпы по орбитальной праще вокруг черных дыр и перехватывайте вражеские пули.
+      Исследуйте мир вокруг вашей Базы, входите в пространственные Аномалии для зачистки данжей с боссами, собирайте модули и возвращайтесь в док ремонта.
     </p>
 
     <div class="diff-section">
@@ -193,7 +194,7 @@
 
     <div class="title-footer">
       <div id="title-best-record" class="record-line"></div>
-      <span id="title-version" class="version-pill">Версия v1.5.1</span>
+      <span id="title-version" class="version-pill">Версия v2.0.0</span>
     </div>
   </dialog>
 
@@ -461,7 +462,7 @@
     <div class="stats-grid">
       <div class="stat-box"><div id="go-score" class="val">0</div><div class="lbl">Итоговый счет</div></div>
       <div class="stat-box"><div id="go-best" class="val">0</div><div class="lbl">Лучший рекорд</div></div>
-      <div class="stat-box"><div id="go-wave" class="val">1</div><div class="lbl">Достигнута волна</div></div>
+      <div class="stat-box"><div id="go-wave" class="val">1</div><div class="lbl">Аномалий / Волна</div></div>
       <div class="stat-box"><div id="go-kills" class="val">0</div><div class="lbl">Уничтожено целей</div></div>
       <div class="stat-box"><div id="go-max-combo" class="val">×1.0</div><div class="lbl">Макс. резонанс</div></div>
       <div class="stat-box"><div id="go-evolutions" class="val">0</div><div class="lbl">Апекс-эволюций</div></div>
@@ -478,12 +479,12 @@
     </div>
   </dialog>
 
-  <script src="js/physics.js?v=1.5.1"></script>
-  <script src="js/sprites.js?v=1.5.1"></script>
-  <script src="js/gpu.js?v=1.5.1"></script>
-  <script src="js/audio.js?v=1.5.1"></script>
-  <script src="js/upgrades.js?v=1.5.1"></script>
-  <script src="js/entities.js?v=1.5.1"></script>
-  <script src="js/game.js?v=1.5.1"></script>
+  <script src="js/physics.js?v=2.0.0"></script>
+  <script src="js/sprites.js?v=2.0.0"></script>
+  <script src="js/gpu.js?v=2.0.0"></script>
+  <script src="js/audio.js?v=2.0.0"></script>
+  <script src="js/upgrades.js?v=2.0.0"></script>
+  <script src="js/entities.js?v=2.0.0"></script>
+  <script src="js/game.js?v=2.0.0"></script>
 </body>
 </html>

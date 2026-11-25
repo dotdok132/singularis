@@ -28,6 +28,7 @@ window.SG = window.SG || {};
         this.units.boss_archon_violet = this._buildArchonCore('#c06cff', '#f3d1ff');
         this.units.pickup_xp = this._buildXpCrystal();
         this.units.pickup_heal = this._buildHealPod();
+        this.units.base_core = this._buildBaseCore();
 
         const flashKeys = [
           'swarmer', 'sniper', 'phalanx', 'pulsar', 'weaver',
@@ -816,6 +817,366 @@ window.SG = window.SG || {};
       ctx.lineWidth = 2;
       ctx.setLineDash([18, 14]);
       ctx.strokeRect(10, 10, bounds.width - 20, bounds.height - 20);
+      ctx.restore();
+    },
+
+    _hexRgba(hex, alpha) {
+      const h = (hex || '#00f0ff').replace('#', '');
+      const n = parseInt(h.length === 3 ? h.replace(/(.)/g, '$1$1') : h, 16) || 0x00f0ff;
+      const r = (n >> 16) & 255;
+      const g = (n >> 8) & 255;
+      const b = n & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    },
+
+    _buildBaseCore() {
+      return this._makeCanvas(192, 192, (ctx, w, h) => {
+        ctx.translate(w * 0.5, h * 0.5);
+
+        // Outer armored docking foundation (octagon)
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4 + Math.PI / 8;
+          const r = 84;
+          const px = Math.cos(a) * r;
+          const py = Math.sin(a) * r;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        const baseGrad = ctx.createRadialGradient(0, 0, 12, 0, 0, 86);
+        baseGrad.addColorStop(0, '#2a394e');
+        baseGrad.addColorStop(0.65, '#1a2434');
+        baseGrad.addColorStop(1, '#0e1522');
+        ctx.fillStyle = baseGrad;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#090e17';
+        ctx.stroke();
+
+        // Diagonal yellow/black Mindustry hazard docking pylons (4 corners)
+        for (let q = 0; q < 4; q++) {
+          ctx.save();
+          ctx.rotate(q * Math.PI * 0.5 + Math.PI * 0.25);
+          ctx.fillStyle = '#182130';
+          ctx.fillRect(46, -15, 24, 30);
+          ctx.strokeStyle = '#0a0f18';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(46, -15, 24, 30);
+
+          ctx.fillStyle = '#ffb838';
+          ctx.fillRect(58, -11, 7, 6);
+          ctx.fillRect(58, 5, 7, 6);
+          ctx.fillStyle = '#24f5a8';
+          ctx.fillRect(50, -3, 4, 6);
+          ctx.restore();
+        }
+
+        // Recessed power trusses (cardinal conduits)
+        for (let q = 0; q < 4; q++) {
+          ctx.save();
+          ctx.rotate(q * Math.PI * 0.5);
+          ctx.fillStyle = '#0d1420';
+          ctx.fillRect(26, -10, 48, 20);
+          ctx.fillStyle = '#334863';
+          ctx.fillRect(30, -7, 40, 14);
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.72)';
+          ctx.fillRect(32, -2, 34, 4);
+          ctx.restore();
+        }
+
+        // Inner titanium hexagonal ring
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (k * Math.PI) / 3;
+          const px = Math.cos(a) * 44;
+          const py = Math.sin(a) * 44;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#223146';
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#4e6b8f';
+        ctx.stroke();
+
+        // Glowing cyan reactor core halo + inner crystal
+        const coreGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, 26);
+        coreGrad.addColorStop(0, '#ffffff');
+        coreGrad.addColorStop(0.35, '#7df9ff');
+        coreGrad.addColorStop(0.75, '#00c8ff');
+        coreGrad.addColorStop(1, 'rgba(0, 200, 255, 0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 26, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(0, -14);
+        ctx.lineTo(12, 0);
+        ctx.lineTo(0, 14);
+        ctx.lineTo(-12, 0);
+        ctx.closePath();
+        ctx.fillStyle = '#d8fcff';
+        ctx.fill();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#00f0ff';
+        ctx.stroke();
+      });
+    },
+
+    drawBase(ctx, base, nowSec, playerInRange, useSprites) {
+      if (!base) return;
+      ctx.save();
+
+      // Repair zone aura
+      const auraGrad = ctx.createRadialGradient(base.x, base.y, 32, base.x, base.y, base.repairRadius);
+      auraGrad.addColorStop(0, playerInRange ? 'rgba(34, 255, 166, 0.14)' : 'rgba(0, 240, 255, 0.08)');
+      auraGrad.addColorStop(0.7, playerInRange ? 'rgba(34, 255, 166, 0.06)' : 'rgba(0, 240, 255, 0.03)');
+      auraGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, base.repairRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rotating dashed perimeter ring
+      ctx.save();
+      ctx.translate(base.x, base.y);
+      ctx.rotate(nowSec * 0.25);
+      ctx.strokeStyle = playerInRange ? 'rgba(34, 255, 166, 0.65)' : 'rgba(0, 240, 255, 0.34)';
+      ctx.lineWidth = playerInRange ? 2 : 1.4;
+      ctx.setLineDash([14, 10]);
+      ctx.beginPath();
+      ctx.arc(0, 0, base.repairRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Core structure sprite or octagonal vector fallback
+      if (useSprites && this.units.base_core) {
+        const half = 74;
+        ctx.drawImage(this.units.base_core, base.x - half, base.y - half, 148, 148);
+      } else {
+        ctx.save();
+        ctx.translate(base.x, base.y);
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4 + Math.PI / 8;
+          const px = Math.cos(a) * 62;
+          const py = Math.sin(a) * 62;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#152033';
+        ctx.fill();
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = '#00f0ff';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        ctx.fillStyle = '#7df9ff';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Rotating radar sweep ring over core
+      ctx.save();
+      ctx.translate(base.x, base.y);
+      ctx.rotate(-nowSec * 0.9);
+      ctx.strokeStyle = 'rgba(125, 249, 255, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 48, 0, Math.PI * 0.55);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, 48, Math.PI, Math.PI * 1.55);
+      ctx.stroke();
+      ctx.restore();
+
+      // Labels
+      ctx.textAlign = 'center';
+      ctx.font = '800 11px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#7df9ff';
+      ctx.fillText('БАЗА // КОМАНДНОЕ ЯДРО', base.x, base.y - 88);
+      if (playerInRange) {
+        ctx.font = '700 10px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#22ffa6';
+        ctx.fillText('ДОК-РЕМОНТ АКТИВЕН', base.x, base.y + 98);
+      }
+
+      ctx.restore();
+    },
+
+    drawAnomaly(ctx, anomaly, nowSec, isNear) {
+      if (!anomaly) return;
+      ctx.save();
+      const { x, y, radius, color, tier, name, cleared, enterProgress, wavesTotal, hasBoss } = anomaly;
+
+      if (cleared) {
+        ctx.strokeStyle = 'rgba(34, 255, 166, 0.34)';
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(x, y, radius * 0.72, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = 'rgba(34, 255, 166, 0.25)';
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.textAlign = 'center';
+        ctx.font = '700 10px "JetBrains Mono", monospace';
+        ctx.fillStyle = 'rgba(34, 255, 166, 0.72)';
+        ctx.fillText('СТАБИЛИЗИРОВАНА', x, y + radius * 0.72 + 16);
+        ctx.restore();
+        return;
+      }
+
+      // Colored radial halo
+      const haloGrad = ctx.createRadialGradient(x, y, radius * 0.2, x, y, radius * 1.9);
+      haloGrad.addColorStop(0, this._hexRgba(color, 0.28));
+      haloGrad.addColorStop(0.55, this._hexRgba(color, 0.12));
+      haloGrad.addColorStop(1, this._hexRgba(color, 0));
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 1.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Two counter-rotating fracture rings
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(nowSec * 0.7);
+      ctx.strokeStyle = this._hexRgba(color, 0.75);
+      ctx.lineWidth = 2;
+      ctx.setLineDash([12, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-nowSec * 1.15);
+      ctx.strokeStyle = this._hexRgba(color, 0.55);
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([7, 10]);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.78, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 6 rotating energy rift arcs
+      ctx.setLineDash([]);
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = color;
+      for (let k = 0; k < 6; k++) {
+        const a = (k * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.58, a, a + 0.38);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Dark void center with pulsing rim
+      const pulse = 0.88 + 0.12 * Math.sin(nowSec * 4.5 + x * 0.01);
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.36 * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = '#04020a';
+      ctx.fill();
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+
+      // Circular entry charge progress arc
+      if (enterProgress > 0.01) {
+        const prog = Math.min(1, enterProgress);
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 9, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * prog);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.font = '800 12px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`ВХОД ${Math.round(prog * 100)}%`, x, y + 4);
+      }
+
+      // Labels
+      ctx.textAlign = 'center';
+      ctx.font = '800 11px "JetBrains Mono", monospace';
+      ctx.fillStyle = color;
+      ctx.fillText(`[T${tier}] ${name}`, x, y - radius - 14);
+      if (isNear) {
+        ctx.font = '700 10px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#e2f6ff';
+        ctx.fillText(`${wavesTotal} ВОЛН${hasBoss ? ' • БОСС' : ''} • ЗАЛЕТИТЕ В РАЗЛОМ`, x, y + radius + 24);
+      }
+
+      ctx.restore();
+    },
+
+    drawExitPortal(ctx, portal, nowSec) {
+      if (!portal) return;
+      ctx.save();
+      const { x, y, radius, progress } = portal;
+
+      const grad = ctx.createRadialGradient(x, y, 8, x, y, radius * 1.75);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+      grad.addColorStop(0.35, 'rgba(34, 255, 166, 0.38)');
+      grad.addColorStop(1, 'rgba(34, 255, 166, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 1.75, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(nowSec * 1.2);
+      ctx.strokeStyle = '#22ffa6';
+      ctx.lineWidth = 2.6;
+      ctx.setLineDash([14, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-nowSec * 1.8);
+      ctx.strokeStyle = '#7df9ff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.68, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.34, 0, Math.PI * 2);
+      ctx.fillStyle = '#a7ffdf';
+      ctx.fill();
+
+      if (progress > 0.01) {
+        const prog = Math.min(1, progress);
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 9, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * prog);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+      }
+
+      ctx.textAlign = 'center';
+      ctx.font = '800 11px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#22ffa6';
+      ctx.fillText('ПОРТАЛ ВЫХОДА [T]', x, y - radius - 14);
+      ctx.font = '700 10px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#d8ecff';
+      ctx.fillText('ВОЗВРАТ В МИР', x, y + radius + 20);
+
       ctx.restore();
     }
   };
