@@ -4,7 +4,7 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.5.0';
+  SG.VERSION = 'v2.5.1';
 
   const WORLD_SIZE = 24000;
   const DUNGEON_SIZE = 2200;
