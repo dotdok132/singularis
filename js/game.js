@@ -214,7 +214,7 @@ window.SG = window.SG || {};
       this._baseHpBonus = 0;
       this._baseShieldBonus = 0;
       this._owPatrolTimer = 2.0;
-      this._raidTimer = 48;
+      this._raidTimer = 155;
       this._raidActive = false;
       this._raidRewardPending = null;
       this._coreTurretCd = 0;
@@ -932,7 +932,7 @@ window.SG = window.SG || {};
       this._baseHpBonus = 0;
       this._baseShieldBonus = 0;
       this._owPatrolTimer = 2.0;
-      this._raidTimer = 48;
+      this._raidTimer = 155;
       this._raidActive = false;
       this._raidRewardPending = null;
       this._coreTurretCd = 0;
@@ -1009,8 +1009,12 @@ window.SG = window.SG || {};
     updateOverworldCombat(dt) {
       if (!this.player || !this.base || this.gameMode !== 'openworld') return;
 
-      // 0. Fog of War Reveal & Procedural POI Scanning/Harvesting
-      this.revealFogAt(this.player.x, this.player.y, 1350, true);
+      // 0. Fog of War Reveal (throttled every 0.25s) & Procedural POI Scanning/Harvesting
+      this._fogTick = (this._fogTick || 0) - dt;
+      if (this._fogTick <= 0) {
+        this._fogTick = 0.25;
+        this.revealFogAt(this.player.x, this.player.y, 1350, true);
+      }
       if (this.pois && this.pois.length > 0) {
         for (let i = 0; i < this.pois.length; i++) {
           const poi = this.pois[i];
@@ -1076,17 +1080,23 @@ window.SG = window.SG || {};
         }
       }
 
-      // 1. Roaming Overworld Patrols (biome-aware, keeps sector alive while flying)
-      const maxPatrols = Math.min(10, 4 + Math.floor(this.level / 3));
+      // 1. Roaming Overworld Patrols (orbit their sector; aggro only when close)
+      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        const e = this.enemies[i];
+        if (!e.isRaider && Math.hypot(e.x - this.player.x, e.y - this.player.y) > 2700) {
+          this.enemies.splice(i, 1);
+        }
+      }
+      const maxPatrols = 5;
       const activePatrols = this.enemies.filter(e => !e.dead && !e.isRaider).length;
       this._owPatrolTimer = (this._owPatrolTimer || 0) - dt;
-      if (this._owPatrolTimer <= 0 && activePatrols < maxPatrols && this.enemies.length < 28) {
-        this._owPatrolTimer = 2.8 + Math.random() * 2.2;
+      if (this._owPatrolTimer <= 0 && activePatrols < maxPatrols && this.enemies.length < 18) {
+        this._owPatrolTimer = 6.0 + Math.random() * 3.0;
         const ang = Math.random() * Math.PI * 2;
-        const dist = 920 + Math.random() * 520;
-        const sx = Math.max(180, Math.min(WORLD_SIZE - 180, this.player.x + Math.cos(ang) * dist));
-        const sy = Math.max(180, Math.min(WORLD_SIZE - 180, this.player.y + Math.sin(ang) * dist));
-        if (Math.hypot(sx - this.base.x, sy - this.base.y) > this.base.repairRadius + 320) {
+        const dist = 1050 + Math.random() * 550;
+        const sx = Math.max(220, Math.min(WORLD_SIZE - 220, this.player.x + Math.cos(ang) * dist));
+        const sy = Math.max(220, Math.min(WORLD_SIZE - 220, this.player.y + Math.sin(ang) * dist));
+        if (Math.hypot(sx - this.base.x, sy - this.base.y) > this.base.repairRadius + 520) {
           const biome = this.getBiomeAt(sx, sy);
           const pool = biome === 'void'
             ? ['pulsar', 'splitter', 'shield', 'shooter']
@@ -1100,16 +1110,20 @@ window.SG = window.SG || {};
             waveNum: Math.max(1, this.level),
             isElite: this.level >= 4 && Math.random() < eliteChance
           });
+          enemy.isPatrol = true;
+          enemy.patrolAnchor = { x: sx, y: sy };
+          enemy._patrolOrbit = Math.random() * Math.PI * 2;
           this.enemies.push(enemy);
         }
       }
 
-      // 2. Periodic Base Raids
+      // 2. Periodic Base Raids (rare event every ~2.5-3.5 minutes)
       const bCount = this.buildings ? this.buildings.length : 0;
       if (!this._raidActive) {
-        this._raidTimer = (this._raidTimer || 48) - dt * (1 + bCount * 0.05);
+        if (typeof this._raidTimer !== 'number') this._raidTimer = 155;
+        this._raidTimer -= dt;
         if (this._raidTimer <= 0) {
-          const squadSize = Math.min(12, 4 + Math.floor(bCount * 0.8) + Math.floor(this.level * 0.35));
+          const squadSize = Math.min(10, 4 + Math.floor(bCount * 0.6) + Math.floor(this.level * 0.25));
           const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
           const scale = (0.88 + this.level * 0.09) * diffCfg.enemyScale;
           const baseAng = Math.random() * Math.PI * 2;
@@ -1135,7 +1149,7 @@ window.SG = window.SG || {};
             matter: 22 + squadSize * 3,
             xp: 120 + squadSize * 22
           };
-          this._raidTimer = 58 + Math.random() * 22;
+          this._raidTimer = 165 + Math.random() * 45;
           this.waveBannerTitle = this.t('game.raidIncoming');
           this.waveSubtitle = this.t('game.raidIncomingSub', { n: squadSize });
           this.waveBannerColor = '#ff3b6b';
@@ -2205,7 +2219,7 @@ window.SG = window.SG || {};
       this._baseHpBonus = 0;
       this._baseShieldBonus = 0;
       this._owPatrolTimer = 2.0;
-      this._raidTimer = 48;
+      this._raidTimer = 155;
       this._raidActive = false;
       this._raidRewardPending = null;
       this._coreTurretCd = 0;

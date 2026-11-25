@@ -1139,6 +1139,28 @@ window.SG = window.SG || {};
     e.inGravityWell = inWell;
 
     const pDist = Math.hypot(player.x - e.x, player.y - e.y);
+    if (e.aggroTimer > 0) e.aggroTimer = Math.max(0, e.aggroTimer - dt);
+    if (e.isPatrol && (pDist <= 480 || e.hitFlash > 0.1)) {
+      e.aggroTimer = 5.5;
+    }
+    if (e.isPatrol && e.patrolAnchor && pDist > 480 && (e.aggroTimer || 0) <= 0) {
+      e._patrolOrbit = (e._patrolOrbit || 0) + dt * 0.7;
+      const tx = e.patrolAnchor.x + Math.cos(e._patrolOrbit) * 190;
+      const ty = e.patrolAnchor.y + Math.sin(e._patrolOrbit) * 190;
+      const dxA = tx - e.x;
+      const dyA = ty - e.y;
+      const dA = Math.hypot(dxA, dyA) || 1;
+      e.vx += (dxA / dA) * (e.speed || 150) * 1.4 * dt;
+      e.vy += (dyA / dA) * (e.speed || 150) * 1.4 * dt;
+      e.vx *= Math.exp(-4.5 * dt);
+      e.vy *= Math.exp(-4.5 * dt);
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      e.x = Math.max(e.radius + 8, Math.min(bounds.width - e.radius - 8, e.x));
+      e.y = Math.max(e.radius + 8, Math.min(bounds.height - e.radius - 8, e.y));
+      return;
+    }
+
     const useRaidTarget = !!(e.isRaider && e.raidTarget && pDist > 340);
     const dxP = (useRaidTarget ? e.raidTarget.x : player.x) - e.x;
     const dyP = (useRaidTarget ? e.raidTarget.y : player.y) - e.y;
