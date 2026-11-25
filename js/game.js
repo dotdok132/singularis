@@ -4,7 +4,7 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.0.2';
+  SG.VERSION = 'v2.1.0';
 
   const WORLD_SIZE = 9600;
   const DUNGEON_SIZE = 2200;
@@ -113,10 +113,16 @@ window.SG = window.SG || {};
       };
       this.repulsorMode = false; // [R] toggles Right-Click between Black Hole (Pull) & White Hole (Push)
 
-      this.bestScore = Number(localStorage.getItem('singularis_best_score') || 0);
-      this.bestWave = Number(localStorage.getItem('singularis_best_wave') || 1);
-      this.totalKills = Number(localStorage.getItem('singularis_total_kills') || 0);
+      const meta = SG.Save ? SG.Save.loadMeta() : null;
+      this.bestScore = meta ? meta.bestScore : Number(localStorage.getItem('singularis_best_score') || 0);
+      this.bestWave = meta ? meta.bestWave : Number(localStorage.getItem('singularis_best_wave') || 1);
+      this.totalKills = meta ? meta.totalKills : Number(localStorage.getItem('singularis_total_kills') || 0);
+      this.totalAnomaliesCleared = meta ? (meta.totalAnomaliesCleared || 0) : 0;
       this.settings = this.loadSettings();
+      this.buildings = [];
+      this.resources = {};
+      this._autoSaveTimer = 0;
+      this._lastSavedAt = 0;
 
       this._subModalOrigin = null;
       this._resetConfirmTimer = null;
@@ -792,6 +798,9 @@ window.SG = window.SG || {};
       this.inBaseZone = false;
 
       this.initOverworldEntities();
+      this.buildings = [];
+      this.resources = {};
+      this._autoSaveTimer = 0;
       this.player = new SG.Player(this.base.x, this.base.y + 145);
       this.overworldPos = { x: this.player.x, y: this.player.y };
       this.initLandmarks();
@@ -845,6 +854,7 @@ window.SG = window.SG || {};
         this.waveBannerColor = '#00f0ff';
         this.waveBannerTimer = 3.2;
         this.closeAllDialogs();
+        this.saveProgress('new_run');
       }
       this.updateHUD();
     }
@@ -1142,6 +1152,7 @@ window.SG = window.SG || {};
       this.waveBannerTimer = 3.0;
       this.particles.addShockwave(this.player.x, this.player.y, 170, anomaly.color, 0.45, 3);
       this.audio.playLevelUp();
+      this.saveProgress('enter_anomaly');
       this.updateHUD();
     }
 
@@ -1186,6 +1197,8 @@ window.SG = window.SG || {};
       this.particles.addText(this.player.x, this.player.y - 36, `+${scoreBonus} ОЧКОВ • +${xpBonus} XP`, '#22ffa6', 1.28, 1.8);
       this.audio.playLevelUp();
       this.gainXP(xpBonus);
+      this.totalAnomaliesCleared = (this.totalAnomaliesCleared || 0) + 1;
+      this.saveProgress('complete_anomaly');
       this.updateHUD();
     }
 
@@ -1241,6 +1254,7 @@ window.SG = window.SG || {};
       if (this.player) {
         this.particles.addShockwave(this.player.x, this.player.y, 130, '#00f0ff', 0.4, 2.5);
       }
+      this.saveProgress('exit_anomaly');
       this.updateHUD();
     }
 
@@ -1263,7 +1277,274 @@ window.SG = window.SG || {};
       this.particles.addShockwave(this.player.x, this.player.y, 120, '#22ffa6', 0.4, 2.5);
       this.particles.addText(this.player.x, this.player.y - 28, 'ВОЗВРАТ НА БАЗУ', '#22ffa6', 1.15, 1.3);
       this.audio.playRewind();
+      this.saveProgress('return_base');
       this.updateHUD();
+    }
+
+    buildSaveSnapshot() {
+      if (!this.player) return null;
+      const inOverworld = this.zone === 'overworld';
+      const saveX = inOverworld
+        ? this.player.x
+        : (this.overworldPos ? this.overworldPos.x : this.base.x);
+      const saveY = inOverworld
+        ? this.player.y
+        : (this.overworldPos ? this.overworldPos.y : (this.base.y + 145));
+
+      return {
+        magic: SG.Save ? SG.Save.MAGIC : 'SINGULARIS_SAVE',
+        schemaVersion: SG.Save ? SG.Save.SCHEMA_VERSION : 1,
+        gameVersion: SG.VERSION,
+        savedAt: Date.now(),
+        difficulty: this.settings.difficulty || 'normal',
+        run: {
+          score: Math.floor(this.score || 0),
+          level: Math.max(1, Math.floor(this.level || 1)),
+          xp: Math.max(0, this.xp || 0),
+          xpNext: Math.max(50, this.xpNext || 115),
+          rerolls: Math.max(0, Math.floor(this.rerolls || 0)),
+          wave: Math.max(1, Math.floor(this.wave || 1)),
+          maxCombo: Math.max(1.0, this.maxCombo || 1.0)
+        },
+        player: {
+          overworldX: Math.round(saveX * 10) / 10,
+          overworldY: Math.round(saveY * 10) / 10,
+          hpRatio: Math.max(0.1, Math.min(1, this.player.hp / Math.max(1, this.player.maxHp))),
+          shieldRatio: Math.max(0, Math.min(1, this.player.shield / Math.max(1, this.player.maxShield))),
+          chronoRatio: Math.max(0, Math.min(1, this.player.chrono / Math.max(1, this.player.maxChrono)))
+        },
+        build: {
+          upgradeStacks: { ...this.upgradeStacks },
+          evolvedUpgrades: Array.from(this.evolvedUpgrades || [])
+        },
+        stats: {
+          kills: Math.floor((this.stats && this.stats.kills) || 0),
+          slingshots: Math.floor((this.stats && this.stats.slingshots) || 0),
+          hijacks: Math.floor((this.stats && this.stats.hijacks) || 0),
+          annihilations: Math.floor((this.stats && this.stats.annihilations) || 0),
+          anomaliesCleared: Math.floor((this.stats && this.stats.anomaliesCleared) || 0)
+        },
+        world: {
+          worldSize: WORLD_SIZE,
+          base: { x: this.base.x, y: this.base.y },
+          anomalies: (this.anomalies || []).map(a => ({
+            id: a.id,
+            tier: a.tier,
+            name: a.name,
+            x: Math.round(a.x * 10) / 10,
+            y: Math.round(a.y * 10) / 10,
+            cleared: !!a.cleared
+          })),
+          buildings: Array.isArray(this.buildings) ? this.buildings : [],
+          resources: (this.resources && typeof this.resources === 'object') ? this.resources : {}
+        }
+      };
+    }
+
+    saveProgress(reason = 'auto') {
+      if (!SG.Save || !this.player) return false;
+      if (this.state === 'title' || this.state === 'gameover') return false;
+      const snap = this.buildSaveSnapshot();
+      const ok = SG.Save.write(snap);
+      if (ok) {
+        this._lastSavedAt = Date.now();
+        this._autoSaveTimer = 0;
+        if (this.score > this.bestScore) this.bestScore = this.score;
+        if (this.wave > this.bestWave) this.bestWave = this.wave;
+        SG.Save.saveMeta({
+          bestScore: this.bestScore,
+          bestWave: this.bestWave,
+          totalKills: this.totalKills,
+          totalAnomaliesCleared: this.totalAnomaliesCleared || 0
+        });
+      }
+      return ok;
+    }
+
+    clearRunSave() {
+      if (SG.Save) SG.Save.clearRun();
+    }
+
+    loadSavedRun(importedData = null) {
+      if (!SG.Save) return false;
+      const saved = importedData ? SG.Save.migrate(importedData, WORLD_SIZE) : SG.Save.read(WORLD_SIZE);
+      if (!saved) return false;
+
+      this.cancelUpgradeAnim();
+      this.clearInputs();
+      this._subModalOrigin = null;
+
+      this.settings.difficulty = DIFFICULTIES[saved.difficulty] ? saved.difficulty : 'normal';
+      this.saveSettings();
+      this.updateDifficultyUI();
+
+      this.zone = 'overworld';
+      this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
+      this.activeAnomaly = null;
+      this.anomalyCleared = false;
+      this.dungeonWaveIndex = 0;
+      this.dungeonWavesTotal = 0;
+      this.exitPortal = null;
+      this.inBaseZone = false;
+
+      this.base = {
+        x: saved.world.base.x,
+        y: saved.world.base.y,
+        radius: 64,
+        repairRadius: 210
+      };
+      this.buildings = Array.isArray(saved.world.buildings) ? saved.world.buildings : [];
+      this.resources = (saved.world.resources && typeof saved.world.resources === 'object') ? saved.world.resources : {};
+
+      if (saved.world.anomalies && saved.world.anomalies.length > 0) {
+        this.anomalies = saved.world.anomalies.map(a => {
+          const cfg = ANOMALY_TIERS[a.tier] || ANOMALY_TIERS[1];
+          const fallbackName = cfg.names[0];
+          return {
+            id: a.id,
+            tier: a.tier,
+            name: a.name || fallbackName,
+            color: cfg.color,
+            startWave: cfg.startWave,
+            wavesTotal: cfg.wavesTotal,
+            hasBoss: cfg.hasBoss,
+            x: a.x,
+            y: a.y,
+            radius: 54 + a.tier * 3,
+            cleared: !!a.cleared,
+            enterProgress: 0
+          };
+        });
+        const uncleared = this.anomalies.filter(a => !a.cleared).length;
+        if (uncleared < 10) {
+          this.anomalies = this.anomalies.filter(a => !a.cleared);
+          const needed = 15 - this.anomalies.length;
+          for (let i = 0; i < needed; i++) {
+            const t = Math.min(5, 1 + ((saved.stats.anomaliesCleared + i) % 5));
+            this.spawnNewAnomaly(t);
+          }
+        }
+      } else {
+        this.initOverworldEntities();
+      }
+
+      this.player = new SG.Player(saved.player.overworldX, saved.player.overworldY);
+      this.overworldPos = { x: this.player.x, y: this.player.y };
+
+      this.wells = [];
+      this.enemies = [];
+      this.bullets = [];
+      this.pickups = [];
+      this.waveQueue = [];
+      this.particles.clear();
+
+      this.score = saved.run.score;
+      this.level = saved.run.level;
+      this.xp = saved.run.xp;
+      this.xpNext = saved.run.xpNext || this.computeNextXp(this.level);
+      this.rerolls = saved.run.rerolls;
+      this.wave = saved.run.wave;
+      this.maxCombo = saved.run.maxCombo;
+      this.combo = 1.0;
+      this.comboTimer = 0;
+      this.comboTier = 0;
+      this.stats = { ...saved.stats };
+      this.currentChoices = [];
+
+      // Re-apply upgrades & evolutions against current patch's catalog
+      this.upgradeStacks = {};
+      this.evolvedUpgrades = new Set();
+      let retiredCount = 0;
+      const evoWanted = new Set(saved.build.evolvedUpgrades || []);
+
+      for (const [id, rawCount] of Object.entries(saved.build.upgradeStacks || {})) {
+        const upg = SG.UPGRADES.find(u => u.id === id);
+        if (!upg) {
+          retiredCount += rawCount;
+          continue;
+        }
+        const stacks = Math.max(1, Math.min(upg.maxStacks, rawCount));
+        this.upgradeStacks[id] = stacks;
+        for (let s = 0; s < stacks; s++) {
+          upg.apply(this.player.mods, this.player, this);
+        }
+        if (upg.evolution && (evoWanted.has(id) || stacks >= upg.maxStacks)) {
+          this.evolvedUpgrades.add(id);
+          upg.evolution.apply(this.player.mods, this.player, this);
+        }
+      }
+
+      if (retiredCount > 0) {
+        this.rerolls += retiredCount;
+        this.xp += retiredCount * 120;
+      }
+
+      this.player.rebuildDrones();
+      this.player.hp = Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * saved.player.hpRatio)));
+      this.player.shield = Math.max(0, Math.min(this.player.maxShield, this.player.maxShield * saved.player.shieldRatio));
+      this.player.chrono = Math.max(0, Math.min(this.player.maxChrono, this.player.maxChrono * saved.player.chronoRatio));
+
+      this._buildDirty = true;
+      this.screenShake = 0;
+      this.hitstopTimer = 0;
+      this.damageFlash = 0;
+      this.crosshairBloom = 0;
+      this.timeScale = 1.0;
+
+      this.initLandmarks();
+      this.snapCameraToPlayer();
+      this.state = 'playing';
+      this.closeAllDialogs();
+
+      const migratedPatch = saved.gameVersion && saved.gameVersion !== SG.VERSION;
+      this.waveBannerTitle = migratedPatch ? 'ПРОГРЕСС ПЕРЕНЕСЁН' : 'ПРОГРЕСС ЗАГРУЖЕН';
+      this.waveSubtitle = migratedPatch
+        ? `${saved.gameVersion} → ${SG.VERSION} • СОХРАНЕНИЕ АДАПТИРОВАНО`
+        : `УР. ${this.level} • АНОМАЛИЙ: ${this.stats.anomaliesCleared}`;
+      this.waveBannerColor = migratedPatch ? '#22ffa6' : '#00f0ff';
+      this.waveBannerTimer = 3.2;
+
+      this.particles.addShockwave(this.player.x, this.player.y, 160, this.waveBannerColor, 0.45, 3);
+      if (retiredCount > 0) {
+        this.particles.addText(this.player.x, this.player.y - 34, `КОМПЕНСАЦИЯ: +${retiredCount} ПЕРЕБРОС`, '#ffd166', 1.15, 2.0);
+      }
+
+      this.saveProgress('loaded');
+      this.updateHUD();
+      this.checkLevelUp();
+      return true;
+    }
+
+    updateTitleSaveUI() {
+      const contBtn = document.getElementById('btn-continue-play');
+      const startBtn = document.getElementById('btn-start-play');
+      const metaEl = document.getElementById('title-save-meta');
+      const saved = SG.Save ? SG.Save.peek(WORLD_SIZE) : null;
+
+      if (saved) {
+        const modsCnt = Object.keys(saved.build.upgradeStacks || {}).length;
+        if (contBtn) {
+          contBtn.hidden = false;
+          contBtn.textContent = `ПРОДОЛЖИТЬ (УР. ${saved.run.level} • АНОМАЛИЙ: ${saved.stats.anomaliesCleared})`;
+        }
+        if (metaEl) {
+          metaEl.hidden = false;
+          metaEl.textContent = `Сохранение ${saved.gameVersion} • Модулей: ${modsCnt} • Очки: ${saved.run.score.toLocaleString('ru-RU')}`;
+        }
+        if (startBtn) {
+          startBtn.classList.remove('btn-primary');
+          startBtn.classList.add('btn-secondary');
+          startBtn.textContent = 'НОВАЯ ИГРА';
+        }
+      } else {
+        if (contBtn) contBtn.hidden = true;
+        if (metaEl) metaEl.hidden = true;
+        if (startBtn) {
+          startBtn.classList.remove('btn-secondary');
+          startBtn.classList.add('btn-primary');
+          startBtn.textContent = 'ИГРАТЬ';
+        }
+      }
     }
 
     handleResize() {
@@ -1496,6 +1777,14 @@ window.SG = window.SG || {};
       });
 
       // Main Menu Buttons
+      const continueBtn = document.getElementById('btn-continue-play');
+      if (continueBtn) {
+        continueBtn.addEventListener('click', () => {
+          this.audio.init();
+          this.loadSavedRun();
+        });
+      }
+
       document.getElementById('btn-start-play').addEventListener('click', () => {
         this.audio.init();
         this.resetRun(true);
@@ -1723,15 +2012,65 @@ window.SG = window.SG || {};
           this.bestScore = 0;
           this.bestWave = 1;
           this.totalKills = 0;
+          this.totalAnomaliesCleared = 0;
           localStorage.removeItem('singularis_best_score');
           localStorage.removeItem('singularis_best_wave');
           localStorage.removeItem('singularis_total_kills');
+          if (SG.Save) localStorage.removeItem(SG.Save.META_KEY);
           this.updateTitleBest();
           setTimeout(() => {
             resetRecBtn.textContent = 'Сбросить рекорды';
           }, 1600);
         });
       }
+
+      const exportSaveBtn = document.getElementById('btn-export-save');
+      const importSaveBtn = document.getElementById('btn-import-save');
+      const saveIoStatus = document.getElementById('save-io-status');
+      if (exportSaveBtn && SG.Save) {
+        exportSaveBtn.addEventListener('click', () => {
+          const snap = (this.player && this.state !== 'title' && this.state !== 'gameover')
+            ? this.buildSaveSnapshot()
+            : SG.Save.peek(WORLD_SIZE);
+          if (!snap) {
+            if (saveIoStatus) saveIoStatus.textContent = 'Нет активного сохранения для экспорта.';
+            return;
+          }
+          const code = SG.Save.exportCode(snap);
+          if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(code).catch(() => {});
+          }
+          if (typeof window.prompt === 'function') {
+            window.prompt('Код сохранения (скопируйте в буфер):', code);
+          }
+          if (saveIoStatus) saveIoStatus.textContent = `Код сохранения экспортирован (${snap.gameVersion}).`;
+        });
+      }
+      if (importSaveBtn && SG.Save) {
+        importSaveBtn.addEventListener('click', () => {
+          const raw = typeof window.prompt === 'function' ? window.prompt('Вставьте код сквозь-патчевого сохранения (SG2:...):') : '';
+          if (!raw) return;
+          const imported = SG.Save.importCode(raw, WORLD_SIZE);
+          if (!imported) {
+            if (saveIoStatus) saveIoStatus.textContent = 'Ошибка: повреждённый или неверный код сохранения.';
+            return;
+          }
+          SG.Save.write(imported);
+          this.updateTitleSaveUI();
+          if (saveIoStatus) saveIoStatus.textContent = `Импортировано (${imported.gameVersion} → ${SG.VERSION}). Загрузка...`;
+          this.loadSavedRun(imported);
+        });
+      }
+
+      // Auto-save when closing tab or hiding app
+      window.addEventListener('beforeunload', () => {
+        this.saveProgress('beforeunload');
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          this.saveProgress('visibilitychange');
+        }
+      });
 
       document.getElementById('btn-close-codex').addEventListener('click', () => {
         const dlg = document.getElementById('codex-dialog');
@@ -1796,9 +2135,11 @@ window.SG = window.SG || {};
           ? `Рекорд: ${this.bestScore.toLocaleString('ru-RU')} очк. • Волна ${this.bestWave} • Всего уничтожено: ${this.totalKills}`
           : 'Первый запуск квантового ядра';
       }
+      this.updateTitleSaveUI();
     }
 
     openMainMenu() {
+      this.saveProgress('mainmenu');
       this.cancelUpgradeAnim();
       this.clearInputs();
       this._subModalOrigin = null;
@@ -1819,7 +2160,7 @@ window.SG = window.SG || {};
         const m = p.mods;
         const armorPct = Math.round(Math.min(0.75, m.armor) * 100);
         const gravPct = Math.round(m.wellGravMult * 100);
-        summary.textContent = `Волна ${this.wave} • Ур. ${this.level} • ${diff.label} • HP ${Math.ceil(p.hp)}/${p.maxHp} • Броня ${armorPct}% • Грав ${gravPct}%`;
+        summary.textContent = `Волна ${this.wave} • Ур. ${this.level} • ${diff.label} • HP ${Math.ceil(p.hp)}/${p.maxHp} • Броня ${armorPct}% • Грав ${gravPct}% • Автосохранение ✓`;
       }
       const pillsEl = document.getElementById('pause-upgrades');
       if (pillsEl) {
@@ -1848,6 +2189,7 @@ window.SG = window.SG || {};
 
     openPauseMenu() {
       if (this.state !== 'playing' && this.state !== 'paused') return;
+      this.saveProgress('pause');
       this.clearInputs();
       this.state = 'paused';
       this.updateHUD();
@@ -2957,6 +3299,7 @@ window.SG = window.SG || {};
           this.particles.addText(this.player.x, this.player.y - 28, `${upg.title.toUpperCase()}`, rarityColor === '#00f0ff' ? '#7df9ff' : rarityColor, 1.18);
         }
         this.updateHUD();
+        this.saveProgress('upgrade');
         this.checkLevelUp();
       };
 
@@ -2985,16 +3328,26 @@ window.SG = window.SG || {};
 
     triggerGameOver() {
       this.clearInputs();
+      this.clearRunSave();
       this.state = 'gameover';
       this.updateHUD();
 
       const isNewRecord = this.score > this.bestScore && this.score > 0;
       if (this.score > this.bestScore) {
         this.bestScore = this.score;
-        localStorage.setItem('singularis_best_score', String(this.bestScore));
       }
       if (this.wave > this.bestWave) {
         this.bestWave = this.wave;
+      }
+      if (SG.Save) {
+        SG.Save.saveMeta({
+          bestScore: this.bestScore,
+          bestWave: this.bestWave,
+          totalKills: this.totalKills,
+          totalAnomaliesCleared: this.totalAnomaliesCleared || 0
+        });
+      } else {
+        localStorage.setItem('singularis_best_score', String(this.bestScore));
         localStorage.setItem('singularis_best_wave', String(this.bestWave));
       }
 
@@ -3049,6 +3402,12 @@ window.SG = window.SG || {};
       const dt = Math.min(0.05, rawDt);
       this.damageFlash = Math.max(0, this.damageFlash - dt * 3.8);
       this.crosshairBloom = Math.max(0, this.crosshairBloom - dt * 36);
+      if (this.state === 'playing') {
+        this._autoSaveTimer = (this._autoSaveTimer || 0) + dt;
+        if (this._autoSaveTimer >= 12) {
+          this.saveProgress('periodic');
+        }
+      }
 
       // Ambient background warp when paused / in menu / modal open
       if (this.state !== 'playing' || this.hasAnyModalOpen()) {

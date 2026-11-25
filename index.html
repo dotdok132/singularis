@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>SINGULARIS — Архитектор Гравитации</title>
-  <link rel="stylesheet" href="styles.css?v=2.0.2">
+  <link rel="stylesheet" href="styles.css?v=2.1.0">
 </head>
 <body>
   <canvas id="gpu-canvas"></canvas>
@@ -68,7 +68,7 @@
     </div>
   </header>
   <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
-  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v2.0.2</div>
+  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v2.1.0</div>
 
   <!-- Mobile / Tablet Twin-Stick & Ability Arc Controls -->
   <div id="touch-controls" class="touch-controls" hidden>
@@ -167,11 +167,13 @@
     </div>
 
     <nav class="menu-nav" aria-label="Главное меню">
+      <button type="button" id="btn-continue-play" class="btn-primary menu-btn menu-btn-wide" hidden>ПРОДОЛЖИТЬ</button>
       <button type="button" id="btn-start-play" class="btn-primary menu-btn menu-btn-wide" autofocus>ИГРАТЬ</button>
       <button type="button" id="btn-open-settings-title" class="btn-ghost menu-btn">НАСТРОЙКИ</button>
       <button type="button" id="btn-open-codex-title" class="btn-ghost menu-btn">КОДЕКС И УПРАВЛЕНИЕ</button>
       <button type="button" id="btn-open-modules-title" class="btn-ghost menu-btn menu-btn-wide">КАТАЛОГ МОДУЛЕЙ (100)</button>
     </nav>
+    <div id="title-save-meta" class="save-meta-line" hidden></div>
 
     <div class="controls-grid compact-controls">
       <div class="ctrl-card">
@@ -194,7 +196,7 @@
 
     <div class="title-footer">
       <div id="title-best-record" class="record-line"></div>
-      <span id="title-version" class="version-pill">Версия v2.0.2</span>
+      <span id="title-version" class="version-pill">Версия v2.1.0</span>
     </div>
   </dialog>
 
@@ -373,6 +375,17 @@
           <span id="val-touch-opacity" class="setting-val">80%</span>
         </div>
       </label>
+
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-title">Сквозь-патчевое сохранение</span>
+          <span class="setting-desc" id="save-io-status">Прогресс переносится между обновлениями. Экспорт или импорт кода.</span>
+        </div>
+        <div class="setting-control setting-btn-group">
+          <button type="button" id="btn-export-save" class="hud-btn">Экспорт</button>
+          <button type="button" id="btn-import-save" class="hud-btn">Импорт</button>
+        </div>
+      </div>
     </div>
 
     <div class="cta-row settings-footer">
@@ -479,12 +492,13 @@
     </div>
   </dialog>
 
-  <script src="js/physics.js?v=2.0.2"></script>
-  <script src="js/sprites.js?v=2.0.2"></script>
-  <script src="js/gpu.js?v=2.0.2"></script>
-  <script src="js/audio.js?v=2.0.2"></script>
-  <script src="js/upgrades.js?v=2.0.2"></script>
-  <script src="js/entities.js?v=2.0.2"></script>
-  <script src="js/game.js?v=2.0.2"></script>
+  <script src="js/physics.js?v=2.1.0"></script>
+  <script src="js/sprites.js?v=2.1.0"></script>
+  <script src="js/gpu.js?v=2.1.0"></script>
+  <script src="js/audio.js?v=2.1.0"></script>
+  <script src="js/upgrades.js?v=2.1.0"></script>
+  <script src="js/entities.js?v=2.1.0"></script>
+  <script src="js/save.js?v=2.1.0"></script>
+  <script src="js/game.js?v=2.1.0"></script>
 </body>
 </html>

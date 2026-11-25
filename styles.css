@@ -641,6 +641,21 @@ dialog[open]::backdrop {
   grid-column: 1 / -1;
 }
 
+.save-meta-line {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--emerald);
+  text-align: center;
+  opacity: 0.9;
+}
+
+.setting-btn-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .compact-controls {
   margin: 16px 0 4px;
 }
