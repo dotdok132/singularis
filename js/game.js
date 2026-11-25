@@ -4,7 +4,7 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.0.1';
+  SG.VERSION = 'v2.0.2';
 
   const WORLD_SIZE = 9600;
   const DUNGEON_SIZE = 2200;
@@ -995,48 +995,10 @@ window.SG = window.SG || {};
       }
     }
 
-    initOverworldEntities() {
-      this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
-      this.anomalies = [];
-      const tiers = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5];
-      for (let i = 0; i < tiers.length; i++) {
-        this.spawnNewAnomaly(tiers[i], i, tiers.length);
-      }
-    }
-
-    spawnNewAnomaly(tier = 1, slotIdx = null, slotCount = null) {
+    _makeAnomaly(tier, x, y) {
       const cfg = ANOMALY_TIERS[tier] || ANOMALY_TIERS[1];
-      const pad = 280;
-      const rings = {
-        1: [700, 1550],
-        2: [1550, 2550],
-        3: [2450, 3450],
-        4: [3300, 4150],
-        5: [3900, 4480]
-      };
-      const [minD, maxD] = rings[tier] || rings[1];
-      let ax = this.base.x + 850;
-      let ay = this.base.y;
-      for (let attempt = 0; attempt < 48; attempt++) {
-        const baseAng = slotIdx !== null && slotCount
-          ? (slotIdx / slotCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5
-          : Math.random() * Math.PI * 2;
-        const dist = minD + Math.random() * (maxD - minD);
-        const cx = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.x + Math.cos(baseAng) * dist));
-        const cy = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.y + Math.sin(baseAng) * dist));
-        const minSep = attempt < 24 ? 680 : 460;
-        const tooCloseToBase = Math.hypot(cx - this.base.x, cy - this.base.y) < 580;
-        const tooCloseToOther = this.anomalies.some(other => Math.hypot(cx - other.x, cy - other.y) < minSep);
-        if (!tooCloseToBase && !tooCloseToOther) {
-          ax = cx;
-          ay = cy;
-          break;
-        }
-        ax = cx;
-        ay = cy;
-      }
       const name = cfg.names[Math.floor(Math.random() * cfg.names.length)];
-      const anomaly = {
+      return {
         id: 'anom_' + Math.random().toString(36).slice(2, 9),
         tier,
         name,
@@ -1044,12 +1006,94 @@ window.SG = window.SG || {};
         startWave: cfg.startWave,
         wavesTotal: cfg.wavesTotal,
         hasBoss: cfg.hasBoss,
-        x: ax,
-        y: ay,
+        x,
+        y,
         radius: 54 + tier * 3,
         cleared: false,
         enterProgress: 0
       };
+    }
+
+    initOverworldEntities() {
+      this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
+      this.anomalies = [];
+      const pad = 420;
+      const span = WORLD_SIZE - pad * 2;
+      const minBaseDist = 1400;
+      const total = 15;
+      const points = [];
+
+      // Mitchell's best-candidate (blue-noise) sampling across the entire 9600x9600 world
+      // outside the 1400px-radius Base building zone so anomalies spread into every corner.
+      for (let i = 0; i < total; i++) {
+        let best = null;
+        let bestScore = -1;
+        for (let k = 0; k < 64; k++) {
+          const cx = pad + Math.random() * span;
+          const cy = pad + Math.random() * span;
+          const distBase = Math.hypot(cx - this.base.x, cy - this.base.y);
+          if (distBase < minBaseDist) continue;
+
+          let minD = distBase - minBaseDist + 1600;
+          for (let j = 0; j < points.length; j++) {
+            const d = Math.hypot(cx - points[j].x, cy - points[j].y);
+            if (d < minD) minD = d;
+          }
+          if (minD > bestScore) {
+            bestScore = minD;
+            best = { x: cx, y: cy, distBase };
+          }
+        }
+        if (best) points.push(best);
+      }
+
+      // Assign tiers 1..5 evenly (3 per tier) from nearest to farthest from Base
+      points.sort((a, b) => a.distBase - b.distBase);
+      for (let i = 0; i < points.length; i++) {
+        const tier = Math.min(5, Math.floor(i / 3) + 1);
+        this.anomalies.push(this._makeAnomaly(tier, points[i].x, points[i].y));
+      }
+    }
+
+    spawnNewAnomaly(tier = 1) {
+      const pad = 420;
+      const span = WORLD_SIZE - pad * 2;
+      const minBaseDist = 1400;
+      const bands = {
+        1: [1400, 2800],
+        2: [2200, 3800],
+        3: [3000, 4700],
+        4: [3800, 5600],
+        5: [4500, 6400]
+      };
+      const [bandMin, bandMax] = bands[tier] || bands[1];
+      let bestX = this.base.x + 1800;
+      let bestY = this.base.y;
+      let bestScore = -Infinity;
+
+      for (let attempt = 0; attempt < 48; attempt++) {
+        const cx = pad + Math.random() * span;
+        const cy = pad + Math.random() * span;
+        const distBase = Math.hypot(cx - this.base.x, cy - this.base.y);
+        if (distBase < minBaseDist) continue;
+
+        let nearest = Infinity;
+        for (let j = 0; j < this.anomalies.length; j++) {
+          const d = Math.hypot(cx - this.anomalies[j].x, cy - this.anomalies[j].y);
+          if (d < nearest) nearest = d;
+        }
+        const bandPenalty = distBase < bandMin
+          ? (bandMin - distBase) * 0.85
+          : (distBase > bandMax ? (distBase - bandMax) * 0.85 : 0);
+        const score = (nearest === Infinity ? 4000 : nearest) - bandPenalty;
+        if (score > bestScore) {
+          bestScore = score;
+          bestX = cx;
+          bestY = cy;
+        }
+      }
+
+      const anomaly = this._makeAnomaly(tier, bestX, bestY);
       this.anomalies.push(anomaly);
       return anomaly;
     }
@@ -1181,9 +1225,9 @@ window.SG = window.SG || {};
 
       // Replenish anomalies so the open world always stays alive with challenges
       const uncleared = this.anomalies.filter(a => !a.cleared).length;
-      if (uncleared < 12) {
+      if (uncleared < 10) {
         this.anomalies = this.anomalies.filter(a => !a.cleared);
-        const needed = 18 - this.anomalies.length;
+        const needed = 15 - this.anomalies.length;
         for (let i = 0; i < needed; i++) {
           const t = Math.min(5, 1 + ((this.stats.anomaliesCleared + i) % 5));
           this.spawnNewAnomaly(t);
