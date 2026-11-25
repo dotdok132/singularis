@@ -36,49 +36,61 @@ window.SG = window.SG || {};
     {
       id: 'xp_extractor',
       name: 'Экстрактор Опыта',
+      enName: 'XP Extractor',
       shortName: 'XP-ЭКСТР',
+      enShortName: 'XP-EXTR',
       color: '#22ffa6',
       maxCount: 3,
       maxLevel: 3,
       costs: [35, 70, 120],
       rates: [6, 12, 20],
       desc: 'Автономно генерирует опыт для вашего ядра даже во время исследования сектора.',
-      rateLabel: (lvl) => `+${[6, 12, 20][lvl - 1] || 6} XP/с`
+      enDesc: 'Passively generates XP for your core even while exploring the sector.',
+      rateLabel: (lvl) => `+${[6, 12, 20][lvl - 1] || 6} XP/s`
     },
     {
       id: 'matter_synth',
       name: 'Синтезатор Материи',
+      enName: 'Matter Synthesizer',
       shortName: 'СИНТЕЗ',
+      enShortName: 'SYNTH',
       color: '#ffd166',
       maxCount: 2,
       maxLevel: 3,
       costs: [40, 80, 135],
       rates: [0.6, 1.2, 2.0],
       desc: 'Стабильно синтезирует квантовую материю для постройки и улучшения базы.',
-      rateLabel: (lvl) => `+${[0.6, 1.2, 2.0][lvl - 1] || 0.6} ⚡/с`
+      enDesc: 'Steadily synthesizes quantum matter to build and upgrade your base.',
+      rateLabel: (lvl) => `+${[0.6, 1.2, 2.0][lvl - 1] || 0.6} ⚡/s`
     },
     {
       id: 'repair_pylon',
       name: 'Квантовый Док',
+      enName: 'Quantum Dock',
       shortName: 'ДОК-ПИЛОН',
+      enShortName: 'DOCK',
       color: '#00f0ff',
       maxCount: 2,
       maxLevel: 3,
       costs: [45, 85, 145],
       rates: [8, 16, 24],
       desc: 'Усиливает ремонт базы и повышает макс. корпус и щит на 8% за уровень (действует везде).',
-      rateLabel: (lvl) => `+${[8, 16, 24][lvl - 1] || 8}% HP/Щит`
+      enDesc: 'Boosts base repair and grants +8% Max HP & Shield per level everywhere.',
+      rateLabel: (lvl) => `+${[8, 16, 24][lvl - 1] || 8}% HP/SH`
     },
     {
       id: 'xp_beacon',
       name: 'Орбитальный Маяк',
+      enName: 'Orbital Beacon',
       shortName: 'МАЯК',
+      enShortName: 'BEACON',
       color: '#c06cff',
       maxCount: 2,
       maxLevel: 3,
       costs: [50, 95, 160],
       rates: [12, 24, 36],
       desc: 'Увеличивает весь получаемый опыт (+12%/ур.) и ускоряет появление новых разломов.',
+      enDesc: 'Increases all XP gained (+12%/lv) and speeds up rift respawns.',
       rateLabel: (lvl) => `+${[12, 24, 36][lvl - 1] || 12}% XP`
     }
   ];
@@ -341,7 +353,7 @@ window.SG = window.SG || {};
 
     loadSettings() {
       const defaults = {
-        lang: 'ru',
+        lang: 'en',
         difficulty: 'normal',
         quality: 'medium',
         gpuAccel: true,
@@ -2936,6 +2948,8 @@ window.SG = window.SG || {};
       const matter = (this.resources && this.resources.matter) || 0;
       if (matter < cost) return;
 
+      const isRu = !this.settings || this.settings.lang === 'ru' || this.settings.lang === 'uk';
+      const bName = isRu ? def.name : (def.enName || def.name);
       this.closeDialogSilently(document.getElementById('build-dialog'));
       this._subModalOrigin = null;
       this.state = 'playing';
@@ -2943,7 +2957,11 @@ window.SG = window.SG || {};
       this.updateHUD();
       const banner = document.getElementById('build-placement-banner');
       const txt = document.getElementById('build-placement-text');
-      if (txt) txt.textContent = `Строительство: ${def.name} (${cost} ⚡) • ЛКМ рядом с базой • ПКМ / Esc — отмена`;
+      if (txt) {
+        txt.textContent = isRu
+          ? `Строительство: ${bName} (${cost} ⚡) • ЛКМ рядом с базой • ПКМ / Esc — отмена`
+          : `Building: ${bName} (${cost} ⚡) • LMB near Base • RMB / Esc — Cancel`;
+      }
       if (banner) banner.hidden = false;
     }
 
@@ -3033,17 +3051,36 @@ window.SG = window.SG || {};
       const ownedList = document.getElementById('build-owned-list');
       if (!gridEl) return;
 
+      const isRu = !this.settings || this.settings.lang === 'ru' || this.settings.lang === 'uk';
       const matter = Math.floor((this.resources && this.resources.matter) || 0);
-      if (matterEl) matterEl.textContent = `⚡ ${matter} Материи`;
+      if (matterEl) matterEl.textContent = isRu ? `⚡ ${matter} Материи` : `⚡ ${matter} Matter`;
+
+      const eyeEl = document.querySelector('#build-dialog .modal-eyebrow');
+      const headEl = document.getElementById('build-heading');
+      const subEl = document.querySelector('#build-dialog .modal-sub');
+      const closeEl = document.getElementById('btn-close-build');
+      const ownedLbl = document.querySelector('#build-owned-section .section-label');
+      if (eyeEl) eyeEl.textContent = isRu ? 'АРХИТЕКТУРА БАЗЫ' : 'BASE ARCHITECTURE';
+      if (headEl) headEl.textContent = isRu ? 'Конструктор базы' : 'Base Constructor';
+      if (subEl) subEl.textContent = isRu
+        ? 'Стройте орбитальные модули вокруг командного ядра. Материя добывается в бою, за зачистку разломов и синтезаторами.'
+        : 'Build orbital modules around the Command Core. Earn Matter from combat, clearing rifts, and Synthesizers.';
+      if (closeEl) closeEl.textContent = isRu ? 'Закрыть [G]' : 'Close [G]';
+      if (ownedLbl) ownedLbl.textContent = isRu ? 'ПОСТРОЕННЫЕ СООРУЖЕНИЯ' : 'ACTIVE STRUCTURES';
 
       const bonuses = this.getBaseBonuses();
       if (summaryEl) {
         summaryEl.innerHTML = '';
-        const chips = [
+        const chips = isRu ? [
           `Фарм XP: +${bonuses.xpPerSec.toFixed(0)} XP/с`,
           `Синтез: +${bonuses.matterPerSec.toFixed(1)} ⚡/с`,
           `Бонус HP/Щита: +${Math.round((bonuses.hpShieldMult - 1) * 100)}%`,
           `Бонус XP: +${Math.round(bonuses.xpMultBonus * 100)}%`
+        ] : [
+          `XP Farm: +${bonuses.xpPerSec.toFixed(0)} XP/s`,
+          `Matter Synth: +${bonuses.matterPerSec.toFixed(1)} ⚡/s`,
+          `HP/Shield Bonus: +${Math.round((bonuses.hpShieldMult - 1) * 100)}%`,
+          `XP Gain Bonus: +${Math.round(bonuses.xpMultBonus * 100)}%`
         ];
         chips.forEach(text => {
           const span = document.createElement('span');
@@ -3066,19 +3103,21 @@ window.SG = window.SG || {};
 
         const sprite = SG.Sprites && SG.Sprites.units && SG.Sprites.units[`bld_${def.id}`];
         const thumbUrl = sprite && typeof sprite.toDataURL === 'function' ? sprite.toDataURL() : '';
+        const dName = isRu ? def.name : (def.enName || def.name);
+        const dDesc = isRu ? def.desc : (def.enDesc || def.desc);
         card.innerHTML = `
           <div class="build-card-top">
             <div class="build-card-title-wrap">
               ${thumbUrl ? `<img class="build-card-icon" src="${thumbUrl}" alt="">` : ''}
-              <span class="build-card-title" style="color:${def.color}">${def.name}</span>
+              <span class="build-card-title" style="color:${def.color}">${dName}</span>
             </div>
             <span class="build-card-count">${count} / ${def.maxCount}</span>
           </div>
-          <div class="build-card-desc">${def.desc}</div>
+          <div class="build-card-desc">${dDesc}</div>
           <div class="build-card-foot">
             <span class="build-card-rate">${def.rateLabel(1)}</span>
             <button type="button" class="btn-primary build-place-btn" style="padding:6px 12px;font-size:12px" ${(!canAfford || atLimit) ? 'disabled' : ''}>
-              ${atLimit ? 'Лимит' : `Построить (${cost} ⚡)`}
+              ${atLimit ? (isRu ? 'Лимит' : 'Maxed') : `${isRu ? 'Построить' : 'Build'} (${cost} ⚡)`}
             </button>
           </div>
         `;
@@ -3102,17 +3141,18 @@ window.SG = window.SG || {};
 
           const row = document.createElement('div');
           row.className = 'build-owned-row';
+          const oName = isRu ? def.name : (def.enName || def.name);
           row.innerHTML = `
             <div class="build-owned-info">
-              <strong style="color:${def.color}">${def.name}</strong>
-              <span class="build-card-count">УР. ${b.level}/${def.maxLevel}</span>
+              <strong style="color:${def.color}">${oName}</strong>
+              <span class="build-card-count">${isRu ? 'УР.' : 'LV.'} ${b.level}/${def.maxLevel}</span>
               <span class="build-card-rate">${def.rateLabel(b.level)}</span>
             </div>
             <div class="build-owned-actions">
               <button type="button" class="hud-btn build-upg-btn" ${(!canUpg || isMax) ? 'disabled' : ''}>
-                ${isMax ? 'МАКС' : `Улучшить (${upgCost} ⚡)`}
+                ${isMax ? 'MAX' : `${isRu ? 'Улучшить' : 'Upgrade'} (${upgCost} ⚡)`}
               </button>
-              <button type="button" class="hud-btn build-del-btn" style="border-color:rgba(255,77,109,0.45);color:#ff8fa3">Разобрать</button>
+              <button type="button" class="hud-btn build-del-btn" style="border-color:rgba(255,77,109,0.45);color:#ff8fa3">${isRu ? 'Разобрать' : 'Dismantle'}</button>
             </div>
           `;
           const upgBtn = row.querySelector('.build-upg-btn');
@@ -6338,6 +6378,12 @@ window.SG = window.SG || {};
 
       if (els.buildBtn) {
         els.buildBtn.hidden = (this.zone !== 'overworld');
+        if (this.zone === 'overworld') {
+          const isRuHud = !this.settings || this.settings.lang === 'ru' || this.settings.lang === 'uk';
+          els.buildBtn.innerHTML = isRuHud
+            ? 'База <span class="key-hint">[G]</span>'
+            : 'Base <span class="key-hint">[G]</span>';
+        }
       }
 
       if (els.muteBtn) {

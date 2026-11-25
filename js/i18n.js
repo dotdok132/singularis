@@ -1382,10 +1382,10 @@ window.SG = window.SG || {};
 
   const I18n = {
     SUPPORTED,
-    current: 'ru',
+    current: 'en',
 
     setLang(lang) {
-      const next = SUPPORTED.includes(lang) ? lang : 'ru';
+      const next = SUPPORTED.includes(lang) ? lang : 'en';
       this.current = next;
       if (typeof document !== 'undefined' && document.documentElement) {
         document.documentElement.lang = next;
@@ -1398,11 +1398,11 @@ window.SG = window.SG || {};
     },
 
     locale() {
-      return LOCALES[this.current] || 'ru-RU';
+      return LOCALES[this.current] || 'en-US';
     },
 
     t(key, vars) {
-      const dict = DICT[this.current] || DICT.ru;
+      const dict = DICT[this.current] || DICT.en;
       let str = Object.prototype.hasOwnProperty.call(dict, key)
         ? dict[key]
         : (Object.prototype.hasOwnProperty.call(DICT.ru, key) ? DICT.ru[key] : key);
