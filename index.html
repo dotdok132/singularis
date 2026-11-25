@@ -43,6 +43,7 @@
         <span id="hud-score" class="score-num">0</span>
         <span id="hud-combo" class="combo-badge">×1.0</span>
         <span id="hud-wave" class="wave-badge">ВОЛНА 1</span>
+        <span id="hud-matter" class="matter-badge" hidden title="Квантовая материя для строительства">⚡ 0</span>
       </div>
     </div>
 
@@ -51,6 +52,7 @@
         <button type="button" id="btn-hud-menu" class="hud-btn">Меню <span class="key-hint">[Esc]</span></button>
         <button type="button" id="btn-hud-return" class="hud-btn" hidden>На базу <span class="key-hint">[T]</span></button>
         <button type="button" id="btn-hud-map" class="hud-btn" hidden>Карта <span class="key-hint">[Tab]</span></button>
+        <button type="button" id="btn-hud-build" class="hud-btn" hidden>База <span class="key-hint">[G]</span></button>
         <button type="button" id="btn-hud-polarity" class="hud-btn desktop-only-hud">Черная дыра <span class="key-hint">[R]</span></button>
         <button type="button" id="btn-hud-mute" class="hud-btn">Звук: ВКЛ</button>
         <button type="button" id="btn-hud-modules" class="hud-btn desktop-only-hud" data-i18n-html="hud.modules">Модули <span class="key-hint">[B]</span></button>
@@ -568,6 +570,33 @@
       </div>
     </div>
   </dialog>
+
+  <!-- Base Construction Modal -->
+  <dialog id="build-dialog" class="build-dialog" aria-labelledby="build-heading">
+    <div class="build-head">
+      <div>
+        <div class="modal-eyebrow">АРХИТЕКТУРА БАЗЫ</div>
+        <h2 id="build-heading" class="modal-title" style="font-size:24px;margin:2px 0 0">Конструктор базы</h2>
+      </div>
+      <div class="build-head-right">
+        <span id="build-matter-val" class="build-matter-pill">⚡ 0 Материи</span>
+        <button type="button" id="btn-close-build" class="btn-primary" style="padding:7px 14px;font-size:12px" autofocus>Закрыть [G]</button>
+      </div>
+    </div>
+    <p class="modal-sub" style="margin:8px 0 12px">Стройте орбитальные модули вокруг командного ядра. Материя добывается в бою, за зачистку разломов и синтезаторами.</p>
+    <div id="build-summary-strip" class="build-summary-strip"></div>
+    <div id="build-catalog-grid" class="build-catalog-grid"></div>
+    <div id="build-owned-section" class="build-owned-section" hidden>
+      <div class="section-label">ПОСТРОЕННЫЕ СООРУЖЕНИЯ</div>
+      <div id="build-owned-list" class="build-owned-list"></div>
+    </div>
+  </dialog>
+
+  <!-- Active Placement Banner -->
+  <div id="build-placement-banner" class="build-placement-banner" hidden>
+    <span id="build-placement-text">Выберите место рядом с базой • ЛКМ — построить • ПКМ / Esc — отмена</span>
+    <button type="button" id="btn-cancel-placement" class="hud-btn">Отмена</button>
+  </div>
 
   <!-- Game Over Summary Modal -->
   <dialog id="gameover-dialog" aria-labelledby="go-heading">

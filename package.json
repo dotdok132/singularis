@@ -1,0 +1,14 @@
+{
+  "name": "singularis",
+  "version": "2.4.1",
+  "private": true,
+  "scripts": {
+    "prepare-dist": "node scripts/build-dist.mjs",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0"
+  }
+}

@@ -26,7 +26,61 @@ window.SG = window.SG || {};
     'codex-dialog',
     'modules-dialog',
     'worldmap-dialog',
+    'build-dialog',
     'gameover-dialog'
+  ];
+
+  const BUILD_MIN_R = 115;
+  const BUILD_MAX_R = 1200;
+  const BUILDING_DEFS = [
+    {
+      id: 'xp_extractor',
+      name: 'Экстрактор Опыта',
+      shortName: 'XP-ЭКСТР',
+      color: '#22ffa6',
+      maxCount: 3,
+      maxLevel: 3,
+      costs: [35, 70, 120],
+      rates: [6, 12, 20],
+      desc: 'Автономно генерирует опыт для вашего ядра даже во время исследования сектора.',
+      rateLabel: (lvl) => `+${[6, 12, 20][lvl - 1] || 6} XP/с`
+    },
+    {
+      id: 'matter_synth',
+      name: 'Синтезатор Материи',
+      shortName: 'СИНТЕЗ',
+      color: '#ffd166',
+      maxCount: 2,
+      maxLevel: 3,
+      costs: [40, 80, 135],
+      rates: [0.6, 1.2, 2.0],
+      desc: 'Стабильно синтезирует квантовую материю для постройки и улучшения базы.',
+      rateLabel: (lvl) => `+${[0.6, 1.2, 2.0][lvl - 1] || 0.6} ⚡/с`
+    },
+    {
+      id: 'repair_pylon',
+      name: 'Квантовый Док',
+      shortName: 'ДОК-ПИЛОН',
+      color: '#00f0ff',
+      maxCount: 2,
+      maxLevel: 3,
+      costs: [45, 85, 145],
+      rates: [8, 16, 24],
+      desc: 'Усиливает ремонт базы и повышает макс. корпус и щит на 8% за уровень (действует везде).',
+      rateLabel: (lvl) => `+${[8, 16, 24][lvl - 1] || 8}% HP/Щит`
+    },
+    {
+      id: 'xp_beacon',
+      name: 'Орбитальный Маяк',
+      shortName: 'МАЯК',
+      color: '#c06cff',
+      maxCount: 2,
+      maxLevel: 3,
+      costs: [50, 95, 160],
+      rates: [12, 24, 36],
+      desc: 'Увеличивает весь получаемый опыт (+12%/ур.) и ускоряет появление новых разломов.',
+      rateLabel: (lvl) => `+${[12, 24, 36][lvl - 1] || 12}% XP`
+    }
   ];
 
   const DIFFICULTIES = {
@@ -125,7 +179,13 @@ window.SG = window.SG || {};
       this.gameMode = 'openworld';
       this.settings = this.loadSettings();
       this.buildings = [];
-      this.resources = {};
+      this.resources = { matter: isEndless ? 0 : 60 };
+      this.buildPlacement = null;
+      this._baseXpAcc = 0;
+      this._baseMatterAcc = 0;
+      this._basePulseTimer = 0;
+      this._baseHpBonus = 0;
+      this._baseShieldBonus = 0;
       this._autoSaveTimer = 0;
       this._lastSavedAt = 0;
 
@@ -244,6 +304,7 @@ window.SG = window.SG || {};
         score: document.getElementById('hud-score'),
         combo: document.getElementById('hud-combo'),
         wave: document.getElementById('hud-wave'),
+        matter: document.getElementById('hud-matter'),
         level: document.getElementById('hud-level'),
         dash: document.getElementById('hud-dash'),
         rewind: document.getElementById('hud-rewind'),
@@ -252,6 +313,7 @@ window.SG = window.SG || {};
         buildStrip: document.getElementById('hud-build-strip'),
         returnBtn: document.getElementById('btn-hud-return'),
         mapBtn: document.getElementById('btn-hud-map'),
+        buildBtn: document.getElementById('btn-hud-build'),
         polBtn: document.getElementById('btn-hud-polarity'),
         muteBtn: document.getElementById('btn-hud-mute'),
         menuBtn: document.getElementById('btn-hud-menu'),
@@ -829,7 +891,13 @@ window.SG = window.SG || {};
       this._worldMapHover = null;
 
       this.buildings = [];
-      this.resources = {};
+      this.resources = { matter: isEndless ? 0 : 60 };
+      this.buildPlacement = null;
+      this._baseXpAcc = 0;
+      this._baseMatterAcc = 0;
+      this._basePulseTimer = 0;
+      this._baseHpBonus = 0;
+      this._baseShieldBonus = 0;
       this._autoSaveTimer = 0;
       if (isEndless) {
         this.anomalies = [];
@@ -1097,7 +1165,9 @@ window.SG = window.SG || {};
     }
 
     _rollAnomalyRespawnDelay(tier = 1) {
-      return 30 + (tier || 1) * 5 + Math.random() * 15;
+      const base = 30 + (tier || 1) * 5 + Math.random() * 15;
+      const mult = this.getBaseBonuses ? this.getBaseBonuses().respawnSpeedMult : 1;
+      return Math.max(8, base * mult);
     }
 
     _makeAnomaly(tier, x, y) {
@@ -1296,6 +1366,9 @@ window.SG = window.SG || {};
       const scoreBonus = 1500 * tier;
       this.score += scoreBonus;
       const xpBonus = Math.round(this.xpNext * 0.75 + 80 * tier);
+      const matterBonus = 25 + tier * 20;
+      if (!this.resources) this.resources = { matter: 0 };
+      this.resources.matter = (this.resources.matter || 0) + matterBonus;
 
       // Spawn Extraction Portal near player (inside dungeon bounds)
       const pAng = Math.random() * Math.PI * 2;
@@ -1676,7 +1749,16 @@ window.SG = window.SG || {};
         repairRadius: 210
       };
       this.buildings = Array.isArray(saved.world.buildings) ? saved.world.buildings : [];
-      this.resources = (saved.world.resources && typeof saved.world.resources === 'object') ? saved.world.resources : {};
+      const savedMatter = (saved.world.resources && typeof saved.world.resources.matter === 'number')
+        ? saved.world.resources.matter
+        : 60;
+      this.resources = { matter: Math.max(0, savedMatter) };
+      this.buildPlacement = null;
+      this._baseXpAcc = 0;
+      this._baseMatterAcc = 0;
+      this._basePulseTimer = 0;
+      this._baseHpBonus = 0;
+      this._baseShieldBonus = 0;
 
       if (saved.world.anomalies && saved.world.anomalies.length > 0) {
         this.anomalies = saved.world.anomalies.map(a => {
@@ -1758,6 +1840,7 @@ window.SG = window.SG || {};
       }
 
       this.player.rebuildDrones();
+      this.syncBaseBonuses();
       this.player.hp = Math.max(1, Math.min(this.player.maxHp, Math.round(this.player.maxHp * saved.player.hpRatio)));
       this.player.shield = Math.max(0, Math.min(this.player.maxShield, this.player.maxShield * saved.player.shieldRatio));
       this.player.chrono = Math.max(0, Math.min(this.player.maxChrono, this.player.maxChrono * saved.player.chronoRatio));
@@ -1917,7 +2000,24 @@ window.SG = window.SG || {};
 
         if (e.code === 'Escape' && this.state === 'playing') {
           e.preventDefault();
-          this.openPauseMenu();
+          if (this.buildPlacement) {
+            this.cancelBuildPlacement();
+          } else {
+            this.openPauseMenu();
+          }
+          return;
+        }
+
+        if (e.code === 'KeyG') {
+          const bDlg = document.getElementById('build-dialog');
+          if (this.zone === 'overworld' && (this.state === 'playing' || (bDlg && bDlg.open))) {
+            e.preventDefault();
+            if (this.buildPlacement) {
+              this.cancelBuildPlacement();
+            } else {
+              this.toggleBuildModal();
+            }
+          }
           return;
         }
 
@@ -1981,6 +2081,16 @@ window.SG = window.SG || {};
         this.mouse.x = wp.x;
         this.mouse.y = wp.y;
         if (this.state !== 'playing') return;
+
+        if (this.buildPlacement && this.zone === 'overworld') {
+          if (e.button === 0) {
+            this.tryPlaceBuilding(wp.x, wp.y);
+          } else if (e.button === 2) {
+            e.preventDefault();
+            this.cancelBuildPlacement();
+          }
+          return;
+        }
 
         if (e.button === 0 && this.zone === 'overworld' && this._minimapRect) {
           const rect = this.canvas.getBoundingClientRect();
@@ -2213,6 +2323,26 @@ window.SG = window.SG || {};
           if (!wp) return;
           this._setWorldMapWaypoint(wp.x, wp.y);
           this.renderWorldMap();
+        });
+      }
+
+      const buildHudBtn = document.getElementById('btn-hud-build');
+      if (buildHudBtn) {
+        buildHudBtn.addEventListener('click', () => {
+          if (this.zone === 'overworld') this.toggleBuildModal();
+        });
+      }
+      const closeBuildBtn = document.getElementById('btn-close-build');
+      if (closeBuildBtn) {
+        closeBuildBtn.addEventListener('click', () => {
+          this.closeDialogSilently(document.getElementById('build-dialog'));
+          this.resumeFromSubDialog();
+        });
+      }
+      const cancelPlaceBtn = document.getElementById('btn-cancel-placement');
+      if (cancelPlaceBtn) {
+        cancelPlaceBtn.addEventListener('click', () => {
+          this.cancelBuildPlacement();
         });
       }
 
@@ -2709,6 +2839,285 @@ window.SG = window.SG || {};
       }
     }
 
+    getBaseBonuses() {
+      const list = Array.isArray(this.buildings) ? this.buildings : [];
+      let xpPerSec = 0;
+      let matterPerSec = 0;
+      let hpShieldPct = 0;
+      let xpMultPct = 0;
+      let respawnReduce = 0;
+      let baseRegenMult = 1;
+
+      for (let i = 0; i < list.length; i++) {
+        const b = list[i];
+        const lvl = Math.max(1, Math.min(3, b.level || 1));
+        const def = BUILDING_DEFS.find(d => d.id === b.type);
+        if (!def) continue;
+        const val = def.rates[lvl - 1] || def.rates[0];
+        if (b.type === 'xp_extractor') xpPerSec += val;
+        else if (b.type === 'matter_synth') matterPerSec += val;
+        else if (b.type === 'repair_pylon') {
+          hpShieldPct += val / 100;
+          baseRegenMult += 0.35 * lvl;
+        } else if (b.type === 'xp_beacon') {
+          xpMultPct += val / 100;
+          respawnReduce += 0.08 * lvl;
+        }
+      }
+
+      return {
+        xpPerSec,
+        matterPerSec,
+        hpShieldMult: 1 + hpShieldPct,
+        xpMultBonus: xpMultPct,
+        respawnSpeedMult: Math.max(0.35, 1 - respawnReduce),
+        baseRegenMult
+      };
+    }
+
+    syncBaseBonuses() {
+      if (!this.player) return;
+      const bonuses = this.getBaseBonuses();
+      const prevMult = this._appliedBaseHpMult || 1;
+      const nextMult = bonuses.hpShieldMult || 1;
+      if (Math.abs(prevMult - nextMult) > 0.0001) {
+        const hpRatio = this.player.hp / Math.max(1, this.player.maxHp);
+        const shRatio = this.player.shield / Math.max(1, this.player.maxShield);
+        this.player.maxHp = Math.max(40, Math.round((this.player.maxHp / prevMult) * nextMult));
+        this.player.maxShield = Math.max(0, Math.round((this.player.maxShield / prevMult) * nextMult));
+        this.player.hp = Math.min(this.player.maxHp, Math.max(1, Math.round(this.player.maxHp * hpRatio)));
+        this.player.shield = Math.min(this.player.maxShield, Math.round(this.player.maxShield * shRatio));
+        this._appliedBaseHpMult = nextMult;
+      }
+    }
+
+    isValidBuildingPos(wx, wy) {
+      if (!this.base) return false;
+      const dist = Math.hypot(wx - this.base.x, wy - this.base.y);
+      if (dist < BUILD_MIN_R || dist > BUILD_MAX_R) return false;
+      const list = Array.isArray(this.buildings) ? this.buildings : [];
+      for (let i = 0; i < list.length; i++) {
+        if (Math.hypot(wx - list[i].x, wy - list[i].y) < 88) return false;
+      }
+      return true;
+    }
+
+    openBuildModal(origin = 'playing') {
+      if (this.zone !== 'overworld') return;
+      if (this.state !== 'playing' && this.state !== 'paused') return;
+      this.cancelBuildPlacement();
+      const pauseDlg = document.getElementById('pause-dialog');
+      const resolvedOrigin = (this.state === 'paused' && ((pauseDlg && pauseDlg.open) || this._subModalOrigin === 'pause'))
+        ? 'pause'
+        : origin;
+      this.openSubModal('build-dialog', resolvedOrigin);
+      this.renderBuildModal();
+    }
+
+    toggleBuildModal() {
+      const dlg = document.getElementById('build-dialog');
+      if (!dlg) return;
+      if (dlg.open) {
+        dlg.close();
+      } else if (this.zone === 'overworld' && (this.state === 'playing' || this.state === 'paused')) {
+        this.openBuildModal();
+      }
+    }
+
+    startBuildPlacement(typeId) {
+      const def = BUILDING_DEFS.find(d => d.id === typeId);
+      if (!def) return;
+      const owned = (this.buildings || []).filter(b => b.type === typeId).length;
+      if (owned >= def.maxCount) return;
+      const cost = def.costs[0];
+      const matter = (this.resources && this.resources.matter) || 0;
+      if (matter < cost) return;
+
+      this.closeDialogSilently(document.getElementById('build-dialog'));
+      this.resumeFromSubDialog();
+      this.buildPlacement = { typeId, def, cost };
+      const banner = document.getElementById('build-placement-banner');
+      const txt = document.getElementById('build-placement-text');
+      if (txt) txt.textContent = `Строительство: ${def.name} (${cost} ⚡) • ЛКМ рядом с базой • ПКМ / Esc — отмена`;
+      if (banner) banner.hidden = false;
+    }
+
+    cancelBuildPlacement() {
+      this.buildPlacement = null;
+      const banner = document.getElementById('build-placement-banner');
+      if (banner) banner.hidden = true;
+    }
+
+    tryPlaceBuilding(wx, wy) {
+      if (!this.buildPlacement || this.zone !== 'overworld') return false;
+      const { typeId, def, cost } = this.buildPlacement;
+      const matter = (this.resources && this.resources.matter) || 0;
+      if (matter < cost) {
+        this.cancelBuildPlacement();
+        return false;
+      }
+      if (!this.isValidBuildingPos(wx, wy)) {
+        this.particles.addText(wx, wy - 20, 'Слишком близко или далеко от базы!', '#ff4d6d', 0.95, 1.1);
+        return false;
+      }
+
+      if (!this.resources) this.resources = { matter: 0 };
+      this.resources.matter = Math.max(0, matter - cost);
+      if (!Array.isArray(this.buildings)) this.buildings = [];
+      this.buildings.push({
+        id: 'bld_' + Math.random().toString(36).slice(2, 9),
+        type: typeId,
+        x: Math.round(wx),
+        y: Math.round(wy),
+        level: 1
+      });
+
+      this.syncBaseBonuses();
+      this.particles.addShockwave(wx, wy, 120, def.color, 0.45, 3);
+      this.particles.addText(wx, wy - 28, `+ ${def.name}`, def.color, 1.15, 1.5);
+      this.audio.playLevelUp();
+      this.cancelBuildPlacement();
+      this.saveProgress('build_place');
+      this.updateHUD();
+      return true;
+    }
+
+    upgradeBuilding(id) {
+      const b = (this.buildings || []).find(item => item.id === id);
+      if (!b) return;
+      const def = BUILDING_DEFS.find(d => d.id === b.type);
+      if (!def || b.level >= def.maxLevel) return;
+      const cost = def.costs[b.level];
+      const matter = (this.resources && this.resources.matter) || 0;
+      if (matter < cost) return;
+
+      this.resources.matter = matter - cost;
+      b.level += 1;
+      this.syncBaseBonuses();
+      this.particles.addShockwave(b.x, b.y, 110, '#ffd166', 0.4, 2.5);
+      this.audio.playLevelUp();
+      this.saveProgress('build_upgrade');
+      this.updateHUD();
+      this.renderBuildModal();
+    }
+
+    dismantleBuilding(id) {
+      const idx = (this.buildings || []).findIndex(item => item.id === id);
+      if (idx === -1) return;
+      const b = this.buildings[idx];
+      const def = BUILDING_DEFS.find(d => d.id === b.type);
+      let spent = 0;
+      if (def) {
+        for (let l = 0; l < b.level; l++) spent += def.costs[l] || 0;
+      }
+      const refund = Math.round(spent * 0.5);
+      if (!this.resources) this.resources = { matter: 0 };
+      this.resources.matter = (this.resources.matter || 0) + refund;
+      this.buildings.splice(idx, 1);
+      this.syncBaseBonuses();
+      this.saveProgress('build_dismantle');
+      this.updateHUD();
+      this.renderBuildModal();
+    }
+
+    renderBuildModal() {
+      const matterEl = document.getElementById('build-matter-val');
+      const summaryEl = document.getElementById('build-summary-strip');
+      const gridEl = document.getElementById('build-catalog-grid');
+      const ownedSec = document.getElementById('build-owned-section');
+      const ownedList = document.getElementById('build-owned-list');
+      if (!gridEl) return;
+
+      const matter = Math.floor((this.resources && this.resources.matter) || 0);
+      if (matterEl) matterEl.textContent = `⚡ ${matter} Материи`;
+
+      const bonuses = this.getBaseBonuses();
+      if (summaryEl) {
+        summaryEl.innerHTML = '';
+        const chips = [
+          `Фарм XP: +${bonuses.xpPerSec.toFixed(0)} XP/с`,
+          `Синтез: +${bonuses.matterPerSec.toFixed(1)} ⚡/с`,
+          `Бонус HP/Щита: +${Math.round((bonuses.hpShieldMult - 1) * 100)}%`,
+          `Бонус XP: +${Math.round(bonuses.xpMultBonus * 100)}%`
+        ];
+        chips.forEach(text => {
+          const span = document.createElement('span');
+          span.className = 'build-stat-chip';
+          span.textContent = text;
+          summaryEl.appendChild(span);
+        });
+      }
+
+      gridEl.innerHTML = '';
+      BUILDING_DEFS.forEach(def => {
+        const count = (this.buildings || []).filter(b => b.type === def.id).length;
+        const cost = def.costs[0];
+        const canAfford = matter >= cost;
+        const atLimit = count >= def.maxCount;
+
+        const card = document.createElement('div');
+        card.className = 'build-card';
+        card.style.borderColor = `${def.color}55`;
+
+        card.innerHTML = `
+          <div class="build-card-top">
+            <span class="build-card-title" style="color:${def.color}">${def.name}</span>
+            <span class="build-card-count">${count} / ${def.maxCount}</span>
+          </div>
+          <div class="build-card-desc">${def.desc}</div>
+          <div class="build-card-foot">
+            <span class="build-card-rate">${def.rateLabel(1)}</span>
+            <button type="button" class="btn-primary build-place-btn" style="padding:6px 12px;font-size:12px" ${(!canAfford || atLimit) ? 'disabled' : ''}>
+              ${atLimit ? 'Лимит' : `Построить (${cost} ⚡)`}
+            </button>
+          </div>
+        `;
+        const btn = card.querySelector('.build-place-btn');
+        if (btn && !atLimit && canAfford) {
+          btn.addEventListener('click', () => this.startBuildPlacement(def.id));
+        }
+        gridEl.appendChild(card);
+      });
+
+      const list = this.buildings || [];
+      if (ownedSec && ownedList) {
+        ownedSec.hidden = list.length === 0;
+        ownedList.innerHTML = '';
+        list.forEach(b => {
+          const def = BUILDING_DEFS.find(d => d.id === b.type);
+          if (!def) return;
+          const isMax = b.level >= def.maxLevel;
+          const upgCost = isMax ? 0 : def.costs[b.level];
+          const canUpg = !isMax && matter >= upgCost;
+
+          const row = document.createElement('div');
+          row.className = 'build-owned-row';
+          row.innerHTML = `
+            <div class="build-owned-info">
+              <strong style="color:${def.color}">${def.name}</strong>
+              <span class="build-card-count">УР. ${b.level}/${def.maxLevel}</span>
+              <span class="build-card-rate">${def.rateLabel(b.level)}</span>
+            </div>
+            <div class="build-owned-actions">
+              <button type="button" class="hud-btn build-upg-btn" ${(!canUpg || isMax) ? 'disabled' : ''}>
+                ${isMax ? 'МАКС' : `Улучшить (${upgCost} ⚡)`}
+              </button>
+              <button type="button" class="hud-btn build-del-btn" style="border-color:rgba(255,77,109,0.45);color:#ff8fa3">Разобрать</button>
+            </div>
+          `;
+          const upgBtn = row.querySelector('.build-upg-btn');
+          if (upgBtn && canUpg) {
+            upgBtn.addEventListener('click', () => this.upgradeBuilding(b.id));
+          }
+          const delBtn = row.querySelector('.build-del-btn');
+          if (delBtn) {
+            delBtn.addEventListener('click', () => this.dismantleBuilding(b.id));
+          }
+          ownedList.appendChild(row);
+        });
+      }
+    }
+
     _worldMapEventToWorld(e) {
       const canvas = document.getElementById('worldmap-canvas');
       if (!canvas) return null;
@@ -2849,6 +3258,15 @@ window.SG = window.SG || {};
       ctx.arc(bx, by, 7, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+
+      if (this.buildings && this.buildings.length > 0) {
+        for (let i = 0; i < this.buildings.length; i++) {
+          const b = this.buildings[i];
+          const def = BUILDING_DEFS.find(d => d.id === b.type);
+          ctx.fillStyle = def ? def.color : '#22ffa6';
+          ctx.fillRect(b.x * scale - 2.5, b.y * scale - 2.5, 5, 5);
+        }
+      }
 
       ctx.fillStyle = '#7df9ff';
       ctx.font = '800 11px "JetBrains Mono", system-ui, sans-serif';
@@ -3677,6 +4095,11 @@ window.SG = window.SG || {};
       }
       const gainedScore = Math.round(e.score * this.combo * diffCfg.scoreMult * (1 + (this.player.mods.scoreMultBonus || 0)));
       this.score += gainedScore;
+      if (this.gameMode === 'openworld') {
+        if (!this.resources) this.resources = { matter: 0 };
+        const matterDrop = e.isBoss ? 18 : (e.isElite ? 3 : 1);
+        this.resources.matter = (this.resources.matter || 0) + matterDrop;
+      }
 
       // Vampirism heal, Shield Reaper & Chrono Cascade on kill if unlocked
       if (this.player.mods.vampOnKill > 0) {
@@ -3906,7 +4329,8 @@ window.SG = window.SG || {};
 
     gainXP(amount) {
       const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
-      this.xp += amount * diffCfg.xpMult * (this.player.mods.xpMult || 1.0);
+      const baseXpMult = 1 + (this.getBaseBonuses ? this.getBaseBonuses().xpMultBonus : 0);
+      this.xp += amount * diffCfg.xpMult * (this.player.mods.xpMult || 1.0) * baseXpMult;
       this.checkLevelUp();
     }
 
@@ -4537,15 +4961,57 @@ window.SG = window.SG || {};
       if (this.waveBannerTimer > 0) this.waveBannerTimer -= dt;
       this.updateAnomalyRespawns(dt);
 
+      // Autonomous Base Structures: passive XP & Matter farming in Open World
+      if (this.gameMode === 'openworld' && this.buildings && this.buildings.length > 0) {
+        const bonuses = this.getBaseBonuses();
+        if (bonuses.matterPerSec > 0) {
+          if (!this.resources) this.resources = { matter: 0 };
+          this._baseMatterAcc = (this._baseMatterAcc || 0) + bonuses.matterPerSec * dt;
+          if (this._baseMatterAcc >= 1) {
+            const whole = Math.floor(this._baseMatterAcc);
+            this._baseMatterAcc -= whole;
+            this.resources.matter = (this.resources.matter || 0) + whole;
+          }
+        }
+        if (bonuses.xpPerSec > 0) {
+          this._baseXpAcc = (this._baseXpAcc || 0) + bonuses.xpPerSec * dt;
+          if (this._baseXpAcc >= 1) {
+            const wholeXp = Math.floor(this._baseXpAcc);
+            this._baseXpAcc -= wholeXp;
+            this.gainXP(wholeXp);
+          }
+        }
+        this._basePulseTimer = (this._basePulseTimer || 0) + dt;
+        if (this._basePulseTimer >= 2.6) {
+          this._basePulseTimer = 0;
+          if (this.zone === 'overworld' && this.player) {
+            for (let i = 0; i < this.buildings.length; i++) {
+              const b = this.buildings[i];
+              if (Math.hypot(b.x - this.player.x, b.y - this.player.y) > 950) continue;
+              const def = BUILDING_DEFS.find(d => d.id === b.type);
+              if (!def) continue;
+              if (b.type === 'xp_extractor') {
+                const tickXp = Math.round(def.rates[(b.level || 1) - 1] * 2.6);
+                this.particles.addText(b.x, b.y - 44, `+${tickXp} XP`, '#22ffa6', 0.9, 1.1);
+              } else if (b.type === 'matter_synth') {
+                const tickM = (def.rates[(b.level || 1) - 1] * 2.6).toFixed(1);
+                this.particles.addText(b.x, b.y - 44, `+${tickM} ⚡`, '#ffd166', 0.9, 1.1);
+              }
+            }
+          }
+        }
+      }
+
       if (this.zone === 'overworld') {
         // Peaceful Overworld: Base repair dock & Anomaly Dungeon entry portals
         const distBase = Math.hypot(this.player.x - this.base.x, this.player.y - this.base.y);
         const wasInBase = this.inBaseZone;
         this.inBaseZone = distBase <= this.base.repairRadius;
         if (this.inBaseZone) {
-          this.player.hp = Math.min(this.player.maxHp, this.player.hp + 38 * dt);
-          this.player.shield = Math.min(this.player.maxShield, this.player.shield + 65 * dt);
-          this.player.chrono = Math.min(this.player.maxChrono, this.player.chrono + 55 * dt);
+          const regMult = this.getBaseBonuses ? this.getBaseBonuses().baseRegenMult : 1;
+          this.player.hp = Math.min(this.player.maxHp, this.player.hp + 38 * regMult * dt);
+          this.player.shield = Math.min(this.player.maxShield, this.player.shield + 65 * regMult * dt);
+          this.player.chrono = Math.min(this.player.maxChrono, this.player.chrono + 55 * regMult * dt);
           this.player.dashCooldown = Math.max(0, this.player.dashCooldown - dt * 1.5);
           this.player.rewindCooldown = Math.max(0, this.player.rewindCooldown - dt * 2.0);
           this.player.detonateCooldown = Math.max(0, this.player.detonateCooldown - dt * 2.0);
@@ -5754,6 +6220,13 @@ window.SG = window.SG || {};
 
       const loc = this.locale();
       if (els.score) els.score.textContent = this.score.toLocaleString(loc);
+      if (els.matter) {
+        els.matter.hidden = (this.gameMode !== 'openworld');
+        if (this.gameMode === 'openworld') {
+          const m = Math.floor((this.resources && this.resources.matter) || 0);
+          els.matter.textContent = `⚡ ${m}`;
+        }
+      }
       if (els.combo) els.combo.textContent = `×${this.combo.toFixed(1)}`;
       if (els.wave) {
         if (this.zone === 'overworld') {
@@ -5851,6 +6324,10 @@ window.SG = window.SG || {};
         if (this.zone === 'overworld') {
           els.mapBtn.innerHTML = this.isTouchDevice ? this.t('hud.mapTouch') : this.t('hud.map');
         }
+      }
+
+      if (els.buildBtn) {
+        els.buildBtn.hidden = (this.zone !== 'overworld');
       }
 
       if (els.muteBtn) {
@@ -6045,6 +6522,20 @@ window.SG = window.SG || {};
       // Overworld Base, Anomaly Rifts & Navigation Compasses (or Dungeon Exit Portal)
       if (this.zone === 'overworld' && SG.Sprites) {
         SG.Sprites.drawBase(ctx, this.base, nowSec, this.inBaseZone, useSprites);
+        if (this.buildings && this.buildings.length > 0 && SG.Sprites.drawBuilding) {
+          for (let i = 0; i < this.buildings.length; i++) {
+            const b = this.buildings[i];
+            if (b.x + 140 < camX || b.x - 140 > camX + w || b.y + 140 < camY || b.y - 140 > camY + h) continue;
+            const def = BUILDING_DEFS.find(d => d.id === b.type);
+            if (def) SG.Sprites.drawBuilding(ctx, b, def, this.base, nowSec);
+          }
+        }
+        if (this.buildPlacement && SG.Sprites.drawBuildingGhost) {
+          const gx = this.mouse.x;
+          const gy = this.mouse.y;
+          const valid = this.isValidBuildingPos(gx, gy);
+          SG.Sprites.drawBuildingGhost(ctx, this.buildPlacement.def, gx, gy, valid, this.base, BUILD_MIN_R, BUILD_MAX_R, nowSec);
+        }
         for (let i = 0; i < this.anomalies.length; i++) {
           const a = this.anomalies[i];
           if (a.x + 220 < camX || a.x - 220 > camX + w || a.y + 220 < camY || a.y - 220 > camY + h) continue;
@@ -6584,6 +7075,15 @@ window.SG = window.SG || {};
         ctx.strokeStyle = '#22ffa6';
         ctx.lineWidth = 1;
         ctx.strokeRect(bx - 5.5, by - 5.5, 11, 11);
+
+        if (this.buildings && this.buildings.length > 0) {
+          for (let i = 0; i < this.buildings.length; i++) {
+            const b = this.buildings[i];
+            const def = BUILDING_DEFS.find(d => d.id === b.type);
+            ctx.fillStyle = def ? def.color : '#22ffa6';
+            ctx.fillRect(mx + b.x * scaleX - 1.8, my + b.y * scaleY - 1.8, 3.6, 3.6);
+          }
+        }
 
         for (let i = 0; i < this.anomalies.length; i++) {
           const a = this.anomalies[i];

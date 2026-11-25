@@ -1011,6 +1011,149 @@ window.SG = window.SG || {};
       ctx.restore();
     },
 
+    drawBuilding(ctx, b, def, base, nowSec) {
+      if (!b || !def) return;
+      ctx.save();
+      const col = def.color || '#22ffa6';
+      const lvl = Math.max(1, b.level || 1);
+      const pulse = 0.5 + 0.5 * Math.sin(nowSec * 3.1 + (b.x + b.y) * 0.01);
+
+      // Energy tether to Command Core
+      if (base) {
+        ctx.save();
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.16 + pulse * 0.12;
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath();
+        ctx.moveTo(base.x, base.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+
+        // Moving packet along tether toward base
+        const t = (nowSec * 0.45 + (b.x * 0.0013)) % 1;
+        const px = b.x + (base.x - b.x) * t;
+        const py = b.y + (base.y - b.y) * t;
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.translate(b.x, b.y);
+
+      // Soft aura ring
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.09 + pulse * 0.06;
+      ctx.beginPath();
+      ctx.arc(0, 0, 34 + lvl * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Outer rotating ring
+      ctx.save();
+      ctx.rotate(nowSec * (0.6 + lvl * 0.15));
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 26, 0, Math.PI * 0.65);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, 26, Math.PI, Math.PI * 1.65);
+      ctx.stroke();
+      ctx.restore();
+
+      // Inner chassis polygon
+      const sides = b.type === 'xp_extractor' ? 4 : (b.type === 'matter_synth' ? 6 : (b.type === 'repair_pylon' ? 8 : 3));
+      ctx.save();
+      ctx.rotate(-nowSec * 0.35);
+      ctx.fillStyle = 'rgba(10, 18, 34, 0.92)';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const ang = (i / sides) * Math.PI * 2;
+        const r = 16;
+        const vx = Math.cos(ang) * r;
+        const vy = Math.sin(ang) * r;
+        if (i === 0) ctx.moveTo(vx, vy);
+        else ctx.lineTo(vx, vy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Core gem
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.5 + pulse * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Level pips below structure
+      for (let i = 0; i < lvl; i++) {
+        const ox = (i - (lvl - 1) * 0.5) * 9;
+        ctx.fillStyle = '#ffd166';
+        ctx.fillRect(ox - 2.5, 29, 5, 3.5);
+      }
+
+      // Label & live rate
+      ctx.textAlign = 'center';
+      ctx.font = '800 10px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#e2f8ff';
+      ctx.fillText(`${def.shortName} [УР.${lvl}]`, 0, -34);
+
+      if (def.rateLabel) {
+        ctx.font = '700 9.5px "JetBrains Mono", monospace';
+        ctx.fillStyle = col;
+        ctx.fillText(def.rateLabel(lvl), 0, 44);
+      }
+
+      ctx.restore();
+    },
+
+    drawBuildingGhost(ctx, def, x, y, valid, base, minR, maxR, nowSec) {
+      if (!def || !base) return;
+      ctx.save();
+
+      // Allowed build zone rings around base
+      ctx.strokeStyle = 'rgba(34, 255, 166, 0.28)';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, maxR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 107, 107, 0.32)';
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, minR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Ghost preview at cursor
+      const col = valid ? '#22ffa6' : '#ff4d6d';
+      const pulse = 0.7 + 0.3 * Math.sin(nowSec * 6);
+      ctx.translate(x, y);
+      ctx.globalAlpha = 0.78 * pulse;
+      ctx.fillStyle = valid ? 'rgba(34, 255, 166, 0.16)' : 'rgba(255, 77, 109, 0.16)';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.95;
+      ctx.textAlign = 'center';
+      ctx.font = '800 10.5px "JetBrains Mono", monospace';
+      ctx.fillStyle = col;
+      ctx.fillText(valid ? `ЛКМ: ${def.name}` : 'НЕЛЬЗЯ ПОСТРОИТЬ ЗДЕСЬ', 0, -36);
+      ctx.restore();
+    },
+
     drawAnomaly(ctx, anomaly, nowSec, isNear) {
       if (!anomaly) return;
       ctx.save();

@@ -1,0 +1,16 @@
+[package]
+name = "singularis"
+version = "2.4.1"
+description = "SINGULARIS — Gravity Architect"
+authors = ["dotdok132"]
+edition = "2021"
+
+[lib]
+name = "singularis_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
