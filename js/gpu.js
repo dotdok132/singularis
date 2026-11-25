@@ -477,7 +477,7 @@ window.SG = window.SG || {};
         width, height, dpr, timeSec, timeScale, shakeX, shakeY,
         camX = 0, camY = 0, skipEntityPolys = false, useTextures = true,
         stars, grid, particles, wells, bullets, enemies, pickups,
-        player, autopilot, state, quality, preset
+        player, state, quality, preset
       } = frame;
       const offX = shakeX - camX;
       const offY = shakeY - camY;
@@ -765,31 +765,8 @@ window.SG = window.SG || {};
         }
       }
 
-      // 8. Pack Player, Auras, Drones, Clones, Afterimages & AI Telemetry
+      // 8. Pack Player, Auras, Drones, Clones & Afterimages
       if (player && (state === 'playing' || state === 'upgrade' || state === 'paused')) {
-        // AI Telemetry
-        if (autopilot && autopilot.enabled && autopilot.showTelemetry) {
-          let minS = Infinity, maxS = -Infinity;
-          for (const d of autopilot.sampledDirs) {
-            if (d.score < minS) minS = d.score;
-            if (d.score > maxS) maxS = d.score;
-          }
-          const span = Math.max(1, maxS - minS);
-          for (const d of autopilot.sampledDirs) {
-            const norm = (d.score - minS) / span;
-            const len = 24 + norm * 38;
-            const tr = norm > 0.75 ? 0.13 : (norm < 0.3 ? 1.0 : 0.49);
-            const tg = norm > 0.75 ? 1.0 : (norm < 0.3 ? 0.23 : 0.98);
-            const tb = norm > 0.75 ? 0.65 : (norm < 0.3 ? 0.42 : 1.0);
-            const ta = norm > 0.75 ? 0.55 : (norm < 0.3 ? 0.42 : 0.22);
-            this.pushLine(bLineAlpha, player.x + d.vx * 20, player.y + d.vy * 20, player.x + d.vx * len, player.y + d.vy * len, tr, tg, tb, ta);
-          }
-          if (autopilot.targetPoint) {
-            const tp = autopilot.targetPoint;
-            this.pushCircleOutline(bLineAlpha, tp.x, tp.y, tp.r + 12, 20, 0.13, 1.0, 0.65, 0.78, 0, Math.PI * 2, true);
-          }
-        }
-
         // Temporal rewind 3s ghost & Afterimages (when vector mode)
         if (!skipEntityPolys) {
           if (player.history.length > 15 && player.rewindCooldown <= 0) {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>SINGULARIS — Архитектор Гравитации</title>
-  <link rel="stylesheet" href="styles.css?v=1.5.0">
+  <link rel="stylesheet" href="styles.css?v=1.5.1">
 </head>
 <body>
   <canvas id="gpu-canvas"></canvas>
@@ -44,13 +44,11 @@
         <span id="hud-combo" class="combo-badge">×1.0</span>
         <span id="hud-wave" class="wave-badge">ВОЛНА 1</span>
       </div>
-      <div id="ai-telemetry-banner" class="ai-banner" hidden>ИИ-ТЕЛЕМЕТРИЯ АКТИВНА</div>
     </div>
 
     <div class="hud-actions">
       <div class="btn-row">
         <button type="button" id="btn-hud-menu" class="hud-btn">Меню <span class="key-hint">[Esc]</span></button>
-        <button type="button" id="btn-hud-ai" class="hud-btn">ИИ-Пилот <span class="key-hint">[P]</span></button>
         <button type="button" id="btn-hud-polarity" class="hud-btn desktop-only-hud">Черная дыра <span class="key-hint">[R]</span></button>
         <button type="button" id="btn-hud-mute" class="hud-btn">Звук: ВКЛ</button>
         <button type="button" id="btn-hud-modules" class="hud-btn desktop-only-hud">Модули <span class="key-hint">[B]</span></button>
@@ -69,7 +67,7 @@
     </div>
   </header>
   <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
-  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v1.5.0</div>
+  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v1.5.1</div>
 
   <!-- Mobile / Tablet Twin-Stick & Ability Arc Controls -->
   <div id="touch-controls" class="touch-controls" hidden>
@@ -128,7 +126,7 @@
     <div class="modal-eyebrow">ТАКТИЧЕСКАЯ РЕЛЯТИВИСТСКАЯ ПЕСОЧНИЦА • ROGUELIKE</div>
     <h1 id="title-heading" class="modal-title">SINGULARIS: АРХИТЕКТОР ГРАВИТАЦИИ</h1>
     <p class="modal-sub">
-      Искривляйте пространство-время, разгоняйте залпы по орбитальной праще вокруг черных дыр, перехватывайте вражеские пули или передайте штурвал встроенному ИИ-агенту.
+      Искривляйте пространство-время, разгоняйте залпы по орбитальной праще вокруг черных дыр и перехватывайте вражеские пули.
     </p>
 
     <div class="diff-section">
@@ -168,8 +166,7 @@
     </div>
 
     <nav class="menu-nav" aria-label="Главное меню">
-      <button type="button" id="btn-start-play" class="btn-primary menu-btn" autofocus>ИГРАТЬ</button>
-      <button type="button" id="btn-start-ai" class="btn-secondary menu-btn">ИИ-ДЕМО (ТЕСТ ИНТЕЛЛЕКТА)</button>
+      <button type="button" id="btn-start-play" class="btn-primary menu-btn menu-btn-wide" autofocus>ИГРАТЬ</button>
       <button type="button" id="btn-open-settings-title" class="btn-ghost menu-btn">НАСТРОЙКИ</button>
       <button type="button" id="btn-open-codex-title" class="btn-ghost menu-btn">КОДЕКС И УПРАВЛЕНИЕ</button>
       <button type="button" id="btn-open-modules-title" class="btn-ghost menu-btn menu-btn-wide">КАТАЛОГ МОДУЛЕЙ (100)</button>
@@ -189,14 +186,14 @@
         <p>Bullet-Time, откат на 3с и взрыв дыр.</p>
       </div>
       <div class="ctrl-card">
-        <span class="ctrl-key">[B] + [P] + [Esc]</span>
-        <p>Каталог 100 модулей, ИИ-пилот и пауза.</p>
+        <span class="ctrl-key">[B] + [H] + [Esc]</span>
+        <p>Каталог 100 модулей, кодекс и пауза.</p>
       </div>
     </div>
 
     <div class="title-footer">
       <div id="title-best-record" class="record-line"></div>
-      <span id="title-version" class="version-pill">Версия v1.5.0</span>
+      <span id="title-version" class="version-pill">Версия v1.5.1</span>
     </div>
   </dialog>
 
@@ -307,16 +304,6 @@
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-trajectory" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-telemetry">
-        <div class="setting-info">
-          <span class="setting-title">Векторы телеметрии ИИ [V]</span>
-          <span class="setting-desc">Отображать розу оценки угроз в режиме ИИ-автопилота</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-telemetry" checked>
         </div>
       </label>
 
@@ -487,18 +474,16 @@
     </div>
     <div class="cta-row">
       <button type="button" id="btn-restart" class="btn-primary" autofocus>НОВЫЙ ЗАПУСК</button>
-      <button type="button" id="btn-restart-ai" class="btn-secondary">ЗАПУСТИТЬ ИИ-ПИЛОТА</button>
       <button type="button" id="btn-go-mainmenu" class="btn-ghost">ГЛАВНОЕ МЕНЮ</button>
     </div>
   </dialog>
 
-  <script src="js/physics.js?v=1.5.0"></script>
-  <script src="js/sprites.js?v=1.5.0"></script>
-  <script src="js/gpu.js?v=1.5.0"></script>
-  <script src="js/audio.js?v=1.5.0"></script>
-  <script src="js/upgrades.js?v=1.5.0"></script>
-  <script src="js/entities.js?v=1.5.0"></script>
-  <script src="js/autopilot.js?v=1.5.0"></script>
-  <script src="js/game.js?v=1.5.0"></script>
+  <script src="js/physics.js?v=1.5.1"></script>
+  <script src="js/sprites.js?v=1.5.1"></script>
+  <script src="js/gpu.js?v=1.5.1"></script>
+  <script src="js/audio.js?v=1.5.1"></script>
+  <script src="js/upgrades.js?v=1.5.1"></script>
+  <script src="js/entities.js?v=1.5.1"></script>
+  <script src="js/game.js?v=1.5.1"></script>
 </body>
 </html>

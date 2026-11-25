@@ -4,9 +4,19 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v1.5.0';
+  SG.VERSION = 'v1.5.1';
 
   const WORLD_SIZE = 3200;
+
+  const DIALOG_IDS = [
+    'title-dialog',
+    'pause-dialog',
+    'settings-dialog',
+    'upgrade-dialog',
+    'codex-dialog',
+    'modules-dialog',
+    'gameover-dialog'
+  ];
 
   const DIFFICULTIES = {
     easy: { label: 'Кадет', enemyScale: 0.72, dmgScale: 0.75, xpMult: 1.25, scoreMult: 0.8 },
@@ -62,7 +72,6 @@ window.SG = window.SG || {};
       this.ctx = this.canvas.getContext('2d');
       this.gpu = new SG.GpuRenderer(document.getElementById('gpu-canvas'));
       this.audio = new SG.SoundEngine();
-      this.autopilot = new SG.TacticalAutopilot();
 
       this.viewport = { width: window.innerWidth, height: window.innerHeight };
       this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
@@ -101,9 +110,7 @@ window.SG = window.SG || {};
       this.settings = this.loadSettings();
 
       this._subModalOrigin = null;
-      this._suppressResumeOnClose = false;
       this._resetConfirmTimer = null;
-      this._aiUpgradeTimer = null;
       this._upgradeAnimTimer = null;
       this._upgradeCloseTimer = null;
       this._upgradeSelecting = false;
@@ -205,12 +212,10 @@ window.SG = window.SG || {};
         detonate: document.getElementById('hud-detonate'),
         wellCd: document.getElementById('hud-well-cd'),
         buildStrip: document.getElementById('hud-build-strip'),
-        aiBtn: document.getElementById('btn-hud-ai'),
         polBtn: document.getElementById('btn-hud-polarity'),
         muteBtn: document.getElementById('btn-hud-mute'),
         menuBtn: document.getElementById('btn-hud-menu'),
-        fullscreenBtn: document.getElementById('btn-hud-fullscreen'),
-        aiBanner: document.getElementById('ai-telemetry-banner')
+        fullscreenBtn: document.getElementById('btn-hud-fullscreen')
       };
 
       this.applySettings();
@@ -238,7 +243,6 @@ window.SG = window.SG || {};
         sfxVol: 85,
         screenShake: true,
         trajectoryPreview: true,
-        aiTelemetry: true,
         touchMode: 'auto',
         touchScale: 100,
         touchOpacity: 80,
@@ -288,7 +292,6 @@ window.SG = window.SG || {};
       this.syncTouchMode();
       this.audio.setMusicVolume((this.settings.musicVol || 0) / 100);
       this.audio.setSfxVolume((this.settings.sfxVol || 0) / 100);
-      this.autopilot.showTelemetry = !!this.settings.aiTelemetry;
       const touchEl = (this.touchEls && this.touchEls.root) || document.getElementById('touch-controls');
       if (touchEl) {
         const scale = Math.max(75, Math.min(150, Number(this.settings.touchScale) || 100)) / 100;
@@ -754,8 +757,6 @@ window.SG = window.SG || {};
     }
 
     resetRun(startImmediately = true) {
-      clearTimeout(this._aiUpgradeTimer);
-      this._aiUpgradeTimer = null;
       this.cancelUpgradeAnim();
       this.player = new SG.Player(this.bounds.width * 0.5, this.bounds.height * 0.5);
       this.initLandmarks();
@@ -822,17 +823,27 @@ window.SG = window.SG || {};
       return this.settings.quality !== 'low' && !reduced;
     }
 
-    closeAllDialogs() {
-      this.cancelUpgradeAnim();
-      this._suppressResumeOnClose = true;
-      try {
-        ['title-dialog', 'pause-dialog', 'settings-dialog', 'upgrade-dialog', 'codex-dialog', 'modules-dialog', 'gameover-dialog'].forEach(id => {
-          const dlg = document.getElementById(id);
-          if (dlg && dlg.open) dlg.close();
-        });
-      } finally {
-        this._suppressResumeOnClose = false;
+    hasAnyModalOpen() {
+      return DIALOG_IDS.some(id => {
+        const d = document.getElementById(id);
+        return !!(d && d.open);
+      });
+    }
+
+    closeDialogSilently(dlg) {
+      if (!dlg || !dlg.open) return;
+      if (dlg.dataset) {
+        dlg.dataset.silentClose = String((Number(dlg.dataset.silentClose) || 0) + 1);
       }
+      dlg.close();
+    }
+
+    closeAllDialogs(exceptId = null) {
+      this.cancelUpgradeAnim();
+      DIALOG_IDS.forEach(id => {
+        if (id === exceptId) return;
+        this.closeDialogSilently(document.getElementById(id));
+      });
     }
 
     updateDifficultyUI() {
@@ -870,7 +881,6 @@ window.SG = window.SG || {};
       const sVal = document.getElementById('val-sfx-vol');
       const shakeCb = document.getElementById('set-shake');
       const trajCb = document.getElementById('set-trajectory');
-      const telCb = document.getElementById('set-telemetry');
       const touchModeSel = document.getElementById('set-touch-mode');
       const touchFloatCb = document.getElementById('set-touch-floating');
       const touchAutoCb = document.getElementById('set-touch-autofire');
@@ -893,7 +903,6 @@ window.SG = window.SG || {};
       if (sVal) sVal.textContent = `${this.settings.sfxVol}%`;
       if (shakeCb) shakeCb.checked = !!this.settings.screenShake;
       if (trajCb) trajCb.checked = !!this.settings.trajectoryPreview;
-      if (telCb) telCb.checked = !!this.settings.aiTelemetry;
       if (touchModeSel) touchModeSel.value = this.settings.touchMode || 'auto';
       if (touchFloatCb) touchFloatCb.checked = !!this.settings.touchFloating;
       if (touchAutoCb) touchAutoCb.checked = !!this.settings.touchAutofire;
@@ -1025,16 +1034,9 @@ window.SG = window.SG || {};
           return;
         }
 
-        if (e.code === 'KeyP') {
-          this.toggleAutopilot();
-        } else if (e.code === 'KeyV') {
-          this.settings.aiTelemetry = !this.settings.aiTelemetry;
-          this.autopilot.showTelemetry = this.settings.aiTelemetry;
-          this.saveSettings();
-          this.updateHUD();
-        } else if (e.code === 'KeyM') {
+        if (e.code === 'KeyM') {
           this.toggleMute();
-        } else if (e.code === 'KeyR') {
+        } else if (e.code === 'KeyR' && this.state === 'playing') {
           this.repulsorMode = !this.repulsorMode;
           this.particles.addText(
             this.player.x,
@@ -1107,8 +1109,14 @@ window.SG = window.SG || {};
         }
       });
 
-      const handleSubDialogClose = () => {
-        if (this._suppressResumeOnClose) return;
+      const handleSubDialogClose = (e) => {
+        const dlg = e && e.currentTarget;
+        if (dlg && dlg.dataset && (Number(dlg.dataset.silentClose) || 0) > 0) {
+          dlg.dataset.silentClose = String(Number(dlg.dataset.silentClose) - 1);
+          return;
+        }
+        if (dlg && dlg.open) return;
+
         const origin = this._subModalOrigin;
         this._subModalOrigin = null;
         if (origin === 'title') {
@@ -1119,7 +1127,7 @@ window.SG = window.SG || {};
           if (td && !td.open) td.showModal();
         } else if (origin === 'pause') {
           this.openPauseMenu();
-        } else if (origin === 'playing') {
+        } else if (origin === 'playing' && !this.hasAnyModalOpen()) {
           this.state = 'playing';
           this.updateHUD();
         }
@@ -1137,7 +1145,12 @@ window.SG = window.SG || {};
       const pauseDlg = document.getElementById('pause-dialog');
       if (pauseDlg) {
         pauseDlg.addEventListener('close', () => {
-          if (!this._suppressResumeOnClose && this.state === 'paused') {
+          if (pauseDlg.dataset && (Number(pauseDlg.dataset.silentClose) || 0) > 0) {
+            pauseDlg.dataset.silentClose = String(Number(pauseDlg.dataset.silentClose) - 1);
+            return;
+          }
+          if (pauseDlg.open) return;
+          if (this.state === 'paused' && !this.hasAnyModalOpen()) {
             this.state = 'playing';
             this.updateHUD();
           }
@@ -1170,14 +1183,6 @@ window.SG = window.SG || {};
       // Main Menu Buttons
       document.getElementById('btn-start-play').addEventListener('click', () => {
         this.audio.init();
-        this.autopilot.enabled = false;
-        this.resetRun(true);
-      });
-
-      document.getElementById('btn-start-ai').addEventListener('click', () => {
-        this.audio.init();
-        this.autopilot.enabled = true;
-        this.autopilot.showTelemetry = !!this.settings.aiTelemetry;
         this.resetRun(true);
       });
 
@@ -1196,11 +1201,6 @@ window.SG = window.SG || {};
       // HUD Buttons
       document.getElementById('btn-hud-menu').addEventListener('click', () => {
         if (this.state === 'playing') this.openPauseMenu();
-      });
-
-      document.getElementById('btn-hud-ai').addEventListener('click', () => {
-        this.audio.init();
-        this.toggleAutopilot();
       });
 
       document.getElementById('btn-hud-polarity').addEventListener('click', () => {
@@ -1319,15 +1319,6 @@ window.SG = window.SG || {};
       if (trajCb) {
         trajCb.addEventListener('change', () => {
           this.settings.trajectoryPreview = trajCb.checked;
-          this.saveSettings();
-        });
-      }
-
-      const telCb = document.getElementById('set-telemetry');
-      if (telCb) {
-        telCb.addEventListener('change', () => {
-          this.settings.aiTelemetry = telCb.checked;
-          this.applySettings();
           this.saveSettings();
         });
       }
@@ -1460,12 +1451,6 @@ window.SG = window.SG || {};
         this.resetRun(true);
       });
 
-      document.getElementById('btn-restart-ai').addEventListener('click', () => {
-        this.audio.init();
-        this.autopilot.enabled = true;
-        this.resetRun(true);
-      });
-
       document.getElementById('btn-go-mainmenu').addEventListener('click', () => {
         this.openMainMenu();
       });
@@ -1492,8 +1477,6 @@ window.SG = window.SG || {};
     }
 
     openMainMenu() {
-      clearTimeout(this._aiUpgradeTimer);
-      this._aiUpgradeTimer = null;
       this.cancelUpgradeAnim();
       this.clearInputs();
       this._subModalOrigin = null;
@@ -1564,35 +1547,14 @@ window.SG = window.SG || {};
     openSettings(origin = 'title') {
       this.clearInputs();
       this._subModalOrigin = origin;
-      if (origin === 'title' || origin === 'pause') {
-        this._suppressResumeOnClose = true;
-        try {
-          const parentId = origin === 'title' ? 'title-dialog' : 'pause-dialog';
-          const parentDlg = document.getElementById(parentId);
-          if (parentDlg && parentDlg.open) parentDlg.close();
-        } finally {
-          this._suppressResumeOnClose = false;
-        }
-      }
-      if (origin === 'playing') {
+      this.closeAllDialogs('settings-dialog');
+      if (origin === 'playing' || origin === 'pause') {
         this.state = 'paused';
         this.updateHUD();
       }
       this.syncSettingsUI();
       const dlg = document.getElementById('settings-dialog');
       if (dlg && !dlg.open) dlg.showModal();
-    }
-
-    toggleAutopilot() {
-      this.autopilot.enabled = !this.autopilot.enabled;
-      this.particles.addText(
-        this.player.x,
-        this.player.y - 30,
-        this.autopilot.enabled ? 'ИИ-АВТОПИЛОТ АКТИВИРОВАН' : 'РУЧНОЕ УПРАВЛЕНИЕ',
-        this.autopilot.enabled ? '#22ffa6' : '#00f0ff',
-        1.15
-      );
-      this.updateHUD();
     }
 
     toggleMute() {
@@ -1603,17 +1565,8 @@ window.SG = window.SG || {};
     openSubModal(dialogId, origin = 'playing') {
       this.clearInputs();
       this._subModalOrigin = origin;
-      if (origin === 'title' || origin === 'pause') {
-        this._suppressResumeOnClose = true;
-        try {
-          const parentId = origin === 'title' ? 'title-dialog' : 'pause-dialog';
-          const parentDlg = document.getElementById(parentId);
-          if (parentDlg && parentDlg.open) parentDlg.close();
-        } finally {
-          this._suppressResumeOnClose = false;
-        }
-      }
-      if (this.state === 'playing') {
+      this.closeAllDialogs(dialogId);
+      if (origin === 'playing' || origin === 'pause' || this.state === 'playing') {
         this.state = 'paused';
         this.updateHUD();
       }
@@ -1632,6 +1585,10 @@ window.SG = window.SG || {};
         dlg.close();
       } else if (this.state === 'playing') {
         this.openCodex('playing');
+      } else if (this.state === 'paused') {
+        const pauseDlg = document.getElementById('pause-dialog');
+        const origin = (pauseDlg && pauseDlg.open) ? 'pause' : (this._subModalOrigin || 'pause');
+        this.openCodex(origin);
       }
     }
 
@@ -1735,6 +1692,10 @@ window.SG = window.SG || {};
         dlg.close();
       } else if (this.state === 'playing') {
         this.openModulesCatalog('playing');
+      } else if (this.state === 'paused') {
+        const pauseDlg = document.getElementById('pause-dialog');
+        const origin = (pauseDlg && pauseDlg.open) ? 'pause' : (this._subModalOrigin || 'pause');
+        this.openModulesCatalog(origin);
       }
     }
 
@@ -2496,8 +2457,6 @@ window.SG = window.SG || {};
     }
 
     openUpgradeModal() {
-      clearTimeout(this._aiUpgradeTimer);
-      this._aiUpgradeTimer = null;
       this.cancelUpgradeAnim();
       this.currentChoices = SG.rollUpgradeChoices(this.upgradeStacks, 4, this.evolvedUpgrades);
       if (this.currentChoices.length === 0) return;
@@ -2512,19 +2471,6 @@ window.SG = window.SG || {};
 
       const dlg = document.getElementById('upgrade-dialog');
       if (!dlg.open) dlg.showModal();
-
-      // If AI Autopilot is active, let the user glimpse the choice for 0.85s then auto-pick best synergy!
-      if (this.autopilot.enabled) {
-        this._aiUpgradeTimer = setTimeout(() => {
-          this._aiUpgradeTimer = null;
-          if (this.state === 'upgrade' && !this._upgradeSelecting) {
-            const pick = this.autopilot.pickBestUpgrade(this.currentChoices, this.upgradeStacks);
-            if (pick && this.currentChoices.includes(pick) && (this.upgradeStacks[pick.id] || 0) < pick.maxStacks) {
-              this.selectUpgrade(pick);
-            }
-          }
-        }, 850);
-      }
     }
 
     renderUpgradeChoices() {
@@ -2635,8 +2581,6 @@ window.SG = window.SG || {};
       const prevStack = this.upgradeStacks[upg.id] || 0;
       if (!SG.isUpgradeEligible(upg, this.upgradeStacks, this.evolvedUpgrades)) return;
 
-      clearTimeout(this._aiUpgradeTimer);
-      this._aiUpgradeTimer = null;
       this._upgradeSelecting = true;
 
       const cards = document.querySelectorAll('#upgrade-cards .upgrade-card');
@@ -2780,8 +2724,8 @@ window.SG = window.SG || {};
       this.damageFlash = Math.max(0, this.damageFlash - dt * 3.8);
       this.crosshairBloom = Math.max(0, this.crosshairBloom - dt * 36);
 
-      // Ambient background warp on title screen
-      if (this.state !== 'playing') {
+      // Ambient background warp when paused / in menu / modal open
+      if (this.state !== 'playing' || this.hasAnyModalOpen()) {
         if (this.state === 'title') {
           this.camera.x = Math.max(0, (this.bounds.width - this.viewport.width) * 0.5);
           this.camera.y = Math.max(0, (this.bounds.height - this.viewport.height) * 0.5);
@@ -2807,62 +2751,45 @@ window.SG = window.SG || {};
         return;
       }
 
-      if (!this.isTouchDevice && !this.autopilot.enabled) {
+      if (!this.isTouchDevice) {
         this.mouse.x = this.mouseScreen.x + this.camera.x;
         this.mouse.y = this.mouseScreen.y + this.camera.y;
       }
 
-      // Gather Player or Tactical-AI Input
-      let input;
-      if (this.autopilot.enabled) {
-        input = this.autopilot.computeInput(dt, this);
-        if (input.triggerRewind) {
-          this.player.triggerRewind(this.particles, this.audio, this.grid, this);
-        }
-        if (input.triggerDash) {
-          this.player.triggerDash(input.moveX, input.moveY, this.bounds, this.particles, this.audio, this.grid, this);
-        }
-        if (input.spawnWell) {
-          this.spawnGravityWell(input.spawnWell.x, input.spawnWell.y, input.spawnWell.isRepulsor);
-        }
-        if (input.detonateWells) {
-          this.detonateAllWells();
-        }
-      } else {
-        if (this.touchInput.bulletTime && this.player.chrono <= 1) {
-          this.touchInput.bulletTime = false;
-        }
-        const kbMoveX = (this.keys['KeyD'] || this.keys['ArrowRight'] ? 1 : 0) - (this.keys['KeyA'] || this.keys['ArrowLeft'] ? 1 : 0);
-        const kbMoveY = (this.keys['KeyS'] || this.keys['ArrowDown'] ? 1 : 0) - (this.keys['KeyW'] || this.keys['ArrowUp'] ? 1 : 0);
-        const moveX = Math.abs(this.touchInput.moveX) > 0.05 ? this.touchInput.moveX : kbMoveX;
-        const moveY = Math.abs(this.touchInput.moveY) > 0.05 ? this.touchInput.moveY : kbMoveY;
-        let aimX = this.mouse.x;
-        let aimY = this.mouse.y;
-        let firing = this.mouse.leftDown || this.keys['KeyF'] || this.touchInput.firing;
-        if (this.isTouchDevice) {
-          let ang = this.player.aimAngle;
-          if (this.touchInput.aimHasDir) {
-            ang = Math.atan2(this.touchInput.aimDirY, this.touchInput.aimDirX);
-          } else if (Math.hypot(moveX, moveY) > 0.08) {
-            ang = Math.atan2(moveY, moveX);
-          }
-          aimX = this.player.x + Math.cos(ang) * 235;
-          aimY = this.player.y + Math.sin(ang) * 235;
-          this.mouse.x = aimX;
-          this.mouse.y = aimY;
-          if (this.settings.touchAutofire && this.enemies.length > 0) {
-            firing = true;
-          }
-        }
-        input = {
-          moveX,
-          moveY,
-          aimX,
-          aimY,
-          firing,
-          bulletTime: !!this.keys['Space'] || this.touchInput.bulletTime
-        };
+      // Gather Player Input
+      if (this.touchInput.bulletTime && this.player.chrono <= 1) {
+        this.touchInput.bulletTime = false;
       }
+      const kbMoveX = (this.keys['KeyD'] || this.keys['ArrowRight'] ? 1 : 0) - (this.keys['KeyA'] || this.keys['ArrowLeft'] ? 1 : 0);
+      const kbMoveY = (this.keys['KeyS'] || this.keys['ArrowDown'] ? 1 : 0) - (this.keys['KeyW'] || this.keys['ArrowUp'] ? 1 : 0);
+      const moveX = Math.abs(this.touchInput.moveX) > 0.05 ? this.touchInput.moveX : kbMoveX;
+      const moveY = Math.abs(this.touchInput.moveY) > 0.05 ? this.touchInput.moveY : kbMoveY;
+      let aimX = this.mouse.x;
+      let aimY = this.mouse.y;
+      let firing = this.mouse.leftDown || this.keys['KeyF'] || this.touchInput.firing;
+      if (this.isTouchDevice) {
+        let ang = this.player.aimAngle;
+        if (this.touchInput.aimHasDir) {
+          ang = Math.atan2(this.touchInput.aimDirY, this.touchInput.aimDirX);
+        } else if (Math.hypot(moveX, moveY) > 0.08) {
+          ang = Math.atan2(moveY, moveX);
+        }
+        aimX = this.player.x + Math.cos(ang) * 235;
+        aimY = this.player.y + Math.sin(ang) * 235;
+        this.mouse.x = aimX;
+        this.mouse.y = aimY;
+        if (this.settings.touchAutofire && this.enemies.length > 0) {
+          firing = true;
+        }
+      }
+      const input = {
+        moveX,
+        moveY,
+        aimX,
+        aimY,
+        firing,
+        bulletTime: !!this.keys['Space'] || this.touchInput.bulletTime
+      };
 
       // Player updates in personal proper-time (stays fast during Bullet-Time!)
       this.player.update(dt, input, this.bounds, this.particles);
@@ -4258,17 +4185,6 @@ window.SG = window.SG || {};
         els.menuBtn.innerHTML = this.isTouchDevice ? 'Пауза' : 'Меню <span class="key-hint">[Esc]</span>';
       }
 
-      if (els.aiBtn) {
-        els.aiBtn.classList.toggle('active', this.autopilot.enabled);
-        if (this.isTouchDevice) {
-          els.aiBtn.textContent = this.autopilot.enabled ? 'ИИ: ВКЛ' : 'ИИ';
-        } else {
-          els.aiBtn.innerHTML = this.autopilot.enabled
-            ? 'ИИ: ВКЛ <span class="key-hint">[P]</span>'
-            : 'ИИ-Пилот <span class="key-hint">[P]</span>';
-        }
-      }
-
       if (els.muteBtn) {
         if (this.isTouchDevice) {
           els.muteBtn.textContent = this.audio.muted ? '🔇' : '🔊';
@@ -4282,13 +4198,6 @@ window.SG = window.SG || {};
           ? 'Белая дыра <span class="key-hint">[R]</span>'
           : 'Черная дыра <span class="key-hint">[R]</span>';
         els.polBtn.classList.toggle('repulsor', this.repulsorMode);
-      }
-
-      if (els.aiBanner) {
-        els.aiBanner.hidden = !this.autopilot.enabled;
-        if (this.autopilot.enabled) {
-          els.aiBanner.textContent = `ИИ-ТЕЛЕМЕТРИЯ: ${this.autopilot.decisionLabel}`;
-        }
       }
 
       // Live touch button cooldowns, timers, polarity & chrono state
@@ -4373,7 +4282,6 @@ window.SG = window.SG || {};
           enemies: this.enemies,
           pickups: this.pickups,
           player: this.player,
-          autopilot: this.autopilot,
           state: this.state,
           quality: this.settings.quality,
           preset,
@@ -4606,11 +4514,8 @@ window.SG = window.SG || {};
           SG.renderEnemy(ctx, e, useSprites);
         }
 
-        // Player & AI Telemetry Overlay
+        // Player Render
         if (this.state === 'playing' || this.state === 'upgrade' || this.state === 'paused') {
-          if (!useGpu) {
-            this.autopilot.renderTelemetry(ctx, this.player);
-          }
           this.player.render(ctx, { useSprites, skipAuras: useGpu });
         }
       }
@@ -4791,8 +4696,8 @@ window.SG = window.SG || {};
         this.renderMinimap(ctx, w, h);
       }
 
-      // Custom tactical crosshair in manual play (with recoil bloom, well pips & dual cooldown arcs)
-      if (this.state === 'playing' && !this.autopilot.enabled) {
+      // Custom tactical crosshair (with recoil bloom, well pips & dual cooldown arcs)
+      if (this.state === 'playing') {
         const mx = this.mouse.x - camX;
         const my = this.mouse.y - camY;
         const bloom = this.crosshairBloom || 0;
