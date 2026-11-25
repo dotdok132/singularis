@@ -114,7 +114,7 @@ window.SG = window.SG || {};
       }
     },
 
-    migrate(raw, targetWorldSize = 9600) {
+    migrate(raw, targetWorldSize = 24000) {
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
       if (raw.magic && raw.magic !== MAGIC) return null;
 
@@ -259,7 +259,7 @@ window.SG = window.SG || {};
       }
     },
 
-    read(targetWorldSize = 9600) {
+    read(targetWorldSize = 24000) {
       const ls = getStorage();
       if (!ls) return null;
       const primary = safeParseJson(ls.getItem(STORAGE_KEY));
@@ -270,7 +270,7 @@ window.SG = window.SG || {};
       return this.migrate(backup, targetWorldSize);
     },
 
-    peek(targetWorldSize = 9600) {
+    peek(targetWorldSize = 24000) {
       return this.read(targetWorldSize);
     },
 
@@ -294,7 +294,7 @@ window.SG = window.SG || {};
       }
     },
 
-    importCode(codeStr, targetWorldSize = 9600) {
+    importCode(codeStr, targetWorldSize = 24000) {
       if (!codeStr || typeof codeStr !== 'string') return null;
       const trimmed = codeStr.trim();
       if (!trimmed) return null;

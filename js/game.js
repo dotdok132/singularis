@@ -4,9 +4,9 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.1.0';
+  SG.VERSION = 'v2.2.0';
 
-  const WORLD_SIZE = 9600;
+  const WORLD_SIZE = 24000;
   const DUNGEON_SIZE = 2200;
 
   const ANOMALY_TIERS = {
@@ -24,6 +24,7 @@ window.SG = window.SG || {};
     'upgrade-dialog',
     'codex-dialog',
     'modules-dialog',
+    'worldmap-dialog',
     'gameover-dialog'
   ];
 
@@ -158,6 +159,9 @@ window.SG = window.SG || {};
       this.exitPortal = null;
       this.overworldPos = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5 + 150 };
       this.inBaseZone = false;
+      this.waypoint = null;
+      this._minimapRect = null;
+      this._worldMapHover = null;
       this._lastTouchTime = 0;
       this._upgradeGuardUntil = 0;
       const hasCoarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
@@ -242,6 +246,7 @@ window.SG = window.SG || {};
         wellCd: document.getElementById('hud-well-cd'),
         buildStrip: document.getElementById('hud-build-strip'),
         returnBtn: document.getElementById('btn-hud-return'),
+        mapBtn: document.getElementById('btn-hud-map'),
         polBtn: document.getElementById('btn-hud-polarity'),
         muteBtn: document.getElementById('btn-hud-mute'),
         menuBtn: document.getElementById('btn-hud-menu'),
@@ -796,6 +801,8 @@ window.SG = window.SG || {};
       this.dungeonWavesTotal = 0;
       this.exitPortal = null;
       this.inBaseZone = false;
+      this.waypoint = null;
+      this._worldMapHover = null;
 
       this.initOverworldEntities();
       this.buildings = [];
@@ -974,13 +981,14 @@ window.SG = window.SG || {};
 
     initLandmarks() {
       this.landmarks = [];
+      const isGiganticWorld = this.bounds.width >= 16000;
       const isHugeWorld = this.bounds.width >= 6000;
-      const cols = isHugeWorld ? 10 : 4;
-      const rows = isHugeWorld ? 10 : 4;
-      const pad = isHugeWorld ? 500 : 420;
+      const cols = isGiganticWorld ? 12 : (isHugeWorld ? 10 : 4);
+      const rows = cols;
+      const pad = isGiganticWorld ? 900 : (isHugeWorld ? 500 : 420);
       const stepX = (this.bounds.width - pad * 2) / (cols - 1);
       const stepY = (this.bounds.height - pad * 2) / (rows - 1);
-      const colNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+      const colNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           this.landmarks.push({
@@ -1027,14 +1035,14 @@ window.SG = window.SG || {};
     initOverworldEntities() {
       this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
       this.anomalies = [];
-      const pad = 420;
+      const pad = 900;
       const span = WORLD_SIZE - pad * 2;
-      const minBaseDist = 1400;
+      const minBaseDist = 2600;
       const total = 15;
       const points = [];
 
-      // Mitchell's best-candidate (blue-noise) sampling across the entire 9600x9600 world
-      // outside the 1400px-radius Base building zone so anomalies spread into every corner.
+      // Mitchell's best-candidate (blue-noise) sampling across the gigantic 24000x24000 world
+      // outside the 2600px-radius Base building territory so anomalies spread wide into every sector.
       for (let i = 0; i < total; i++) {
         let best = null;
         let bestScore = -1;
@@ -1044,7 +1052,7 @@ window.SG = window.SG || {};
           const distBase = Math.hypot(cx - this.base.x, cy - this.base.y);
           if (distBase < minBaseDist) continue;
 
-          let minD = distBase - minBaseDist + 1600;
+          let minD = distBase - minBaseDist + 3200;
           for (let j = 0; j < points.length; j++) {
             const d = Math.hypot(cx - points[j].x, cy - points[j].y);
             if (d < minD) minD = d;
@@ -1066,18 +1074,18 @@ window.SG = window.SG || {};
     }
 
     spawnNewAnomaly(tier = 1) {
-      const pad = 420;
+      const pad = 900;
       const span = WORLD_SIZE - pad * 2;
-      const minBaseDist = 1400;
+      const minBaseDist = 2600;
       const bands = {
-        1: [1400, 2800],
-        2: [2200, 3800],
-        3: [3000, 4700],
-        4: [3800, 5600],
-        5: [4500, 6400]
+        1: [2600, 6200],
+        2: [5200, 9000],
+        3: [7600, 11800],
+        4: [9800, 14000],
+        5: [11500, 16000]
       };
       const [bandMin, bandMax] = bands[tier] || bands[1];
-      let bestX = this.base.x + 1800;
+      let bestX = this.base.x + 3200;
       let bestY = this.base.y;
       let bestScore = -Infinity;
 
@@ -1095,7 +1103,7 @@ window.SG = window.SG || {};
         const bandPenalty = distBase < bandMin
           ? (bandMin - distBase) * 0.85
           : (distBase > bandMax ? (distBase - bandMax) * 0.85 : 0);
-        const score = (nearest === Infinity ? 4000 : nearest) - bandPenalty;
+        const score = (nearest === Infinity ? 8000 : nearest) - bandPenalty;
         if (score > bestScore) {
           bestScore = score;
           bestX = cx;
@@ -1119,6 +1127,7 @@ window.SG = window.SG || {};
       };
 
       anomaly.enterProgress = 0;
+      this.waypoint = null;
       this.zone = 'anomaly';
       this.activeAnomaly = anomaly;
       this.anomalyCleared = false;
@@ -1386,6 +1395,8 @@ window.SG = window.SG || {};
       this.dungeonWavesTotal = 0;
       this.exitPortal = null;
       this.inBaseZone = false;
+      this.waypoint = null;
+      this._worldMapHover = null;
 
       this.base = {
         x: saved.world.base.x,
@@ -1582,6 +1593,11 @@ window.SG = window.SG || {};
       this.bgGradSlow = this.ctx.createRadialGradient(w * 0.5, h * 0.5, 40, w * 0.5, h * 0.5, rad);
       this.bgGradSlow.addColorStop(0, '#0c0822');
       this.bgGradSlow.addColorStop(1, '#04030d');
+
+      const wmDlg = document.getElementById('worldmap-dialog');
+      if (wmDlg && wmDlg.open) {
+        this.renderWorldMap();
+      }
     }
 
     bindEvents() {
@@ -1625,6 +1641,15 @@ window.SG = window.SG || {};
         if (e.code === 'Escape' && this.state === 'playing') {
           e.preventDefault();
           this.openPauseMenu();
+          return;
+        }
+
+        if (e.code === 'Tab') {
+          const wmDlg = document.getElementById('worldmap-dialog');
+          if (this.zone === 'overworld' && (this.state === 'playing' || (wmDlg && wmDlg.open))) {
+            e.preventDefault();
+            this.toggleWorldMap();
+          }
           return;
         }
 
@@ -1679,6 +1704,17 @@ window.SG = window.SG || {};
         this.mouse.x = wp.x;
         this.mouse.y = wp.y;
         if (this.state !== 'playing') return;
+
+        if (e.button === 0 && this.zone === 'overworld' && this._minimapRect) {
+          const rect = this.canvas.getBoundingClientRect();
+          const cx = e.clientX - rect.left;
+          const cy = e.clientY - rect.top;
+          const mr = this._minimapRect;
+          if (cx >= mr.x && cx <= mr.x + mr.size && cy >= mr.y && cy <= mr.y + mr.size) {
+            this.openWorldMap();
+            return;
+          }
+        }
 
         if (e.button === 0) {
           this.mouse.leftDown = true;
@@ -1737,6 +1773,9 @@ window.SG = window.SG || {};
 
       const settingsDlg = document.getElementById('settings-dialog');
       if (settingsDlg) settingsDlg.addEventListener('close', handleSubDialogClose);
+
+      const worldmapDlg = document.getElementById('worldmap-dialog');
+      if (worldmapDlg) worldmapDlg.addEventListener('close', handleSubDialogClose);
 
       const pauseDlg = document.getElementById('pause-dialog');
       if (pauseDlg) {
@@ -1811,6 +1850,78 @@ window.SG = window.SG || {};
       if (returnBtn) {
         returnBtn.addEventListener('click', () => {
           this.returnToBase();
+        });
+      }
+
+      const mapBtn = document.getElementById('btn-hud-map');
+      if (mapBtn) {
+        mapBtn.addEventListener('click', () => {
+          this.toggleWorldMap();
+        });
+      }
+
+      const closeMapBtn = document.getElementById('btn-close-worldmap');
+      if (closeMapBtn) {
+        closeMapBtn.addEventListener('click', () => {
+          const dlg = document.getElementById('worldmap-dialog');
+          if (dlg && dlg.open) dlg.close();
+        });
+      }
+
+      const clearWpBtn = document.getElementById('btn-worldmap-clear-wp');
+      if (clearWpBtn) {
+        clearWpBtn.addEventListener('click', () => {
+          this.waypoint = null;
+          this.renderWorldMap();
+        });
+      }
+
+      const mapBaseBtn = document.getElementById('btn-worldmap-base');
+      if (mapBaseBtn) {
+        mapBaseBtn.addEventListener('click', () => {
+          const dlg = document.getElementById('worldmap-dialog');
+          this.closeDialogSilently(dlg);
+          this._subModalOrigin = null;
+          this.state = 'playing';
+          this.returnToBase();
+        });
+      }
+
+      const wmCanvas = document.getElementById('worldmap-canvas');
+      if (wmCanvas) {
+        wmCanvas.addEventListener('mousemove', (e) => {
+          const wp = this._worldMapEventToWorld(e);
+          if (!wp) return;
+          let hover = null;
+          let bestDist = 700;
+          for (let i = 0; i < this.anomalies.length; i++) {
+            const a = this.anomalies[i];
+            const d = Math.hypot(wp.x - a.x, wp.y - a.y);
+            if (d < bestDist) {
+              bestDist = d;
+              hover = { kind: 'anomaly', anomaly: a, wx: wp.x, wy: wp.y };
+            }
+          }
+          if (!hover && Math.hypot(wp.x - this.base.x, wp.y - this.base.y) < 900) {
+            hover = { kind: 'base', wx: wp.x, wy: wp.y };
+          }
+          if (!hover) {
+            hover = { kind: 'sector', wx: wp.x, wy: wp.y };
+          }
+          this._worldMapHover = hover;
+          this.renderWorldMap();
+        });
+
+        wmCanvas.addEventListener('mouseleave', () => {
+          this._worldMapHover = null;
+          this.renderWorldMap();
+        });
+
+        wmCanvas.addEventListener('click', (e) => {
+          const wp = this._worldMapEventToWorld(e);
+          if (!wp) return;
+          this._setWorldMapWaypoint(wp.x, wp.y);
+          this.renderWorldMap();
         });
       }
 
@@ -2253,6 +2364,310 @@ window.SG = window.SG || {};
         const pauseDlg = document.getElementById('pause-dialog');
         const origin = (pauseDlg && pauseDlg.open) ? 'pause' : (this._subModalOrigin || 'pause');
         this.openCodex(origin);
+      }
+    }
+
+    openWorldMap() {
+      if (this.zone !== 'overworld') return;
+      if (this.state !== 'playing' && this.state !== 'paused') return;
+      const pauseDlg = document.getElementById('pause-dialog');
+      const origin = (this.state === 'paused' && ((pauseDlg && pauseDlg.open) || this._subModalOrigin === 'pause'))
+        ? 'pause'
+        : 'playing';
+      this.openSubModal('worldmap-dialog', origin);
+      this.renderWorldMap();
+    }
+
+    toggleWorldMap() {
+      const dlg = document.getElementById('worldmap-dialog');
+      if (!dlg) return;
+      if (dlg.open) {
+        dlg.close();
+      } else if (this.zone === 'overworld' && (this.state === 'playing' || this.state === 'paused')) {
+        this.openWorldMap();
+      }
+    }
+
+    _worldMapEventToWorld(e) {
+      const canvas = document.getElementById('worldmap-canvas');
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const w = rect.width || parseFloat(canvas.style.width) || canvas.width || 640;
+      const h = rect.height || parseFloat(canvas.style.height) || canvas.height || 640;
+      const clientX = typeof e.clientX === 'number' ? e.clientX : rect.left + w * 0.5;
+      const clientY = typeof e.clientY === 'number' ? e.clientY : rect.top + h * 0.5;
+      const nx = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, w)));
+      const ny = Math.max(0, Math.min(1, (clientY - rect.top) / Math.max(1, h)));
+      return {
+        x: nx * WORLD_SIZE,
+        y: ny * WORLD_SIZE
+      };
+    }
+
+    _setWorldMapWaypoint(wx, wy) {
+      let bestAnom = null;
+      let bestDist = 700;
+      for (let i = 0; i < this.anomalies.length; i++) {
+        const a = this.anomalies[i];
+        if (a.cleared) continue;
+        const d = Math.hypot(wx - a.x, wy - a.y);
+        if (d < bestDist) {
+          bestDist = d;
+          bestAnom = a;
+        }
+      }
+      if (bestAnom) {
+        this.waypoint = {
+          x: bestAnom.x,
+          y: bestAnom.y,
+          label: `[T${bestAnom.tier}] ${bestAnom.name}`,
+          color: bestAnom.color
+        };
+        return;
+      }
+      if (Math.hypot(wx - this.base.x, wy - this.base.y) < 900) {
+        this.waypoint = {
+          x: this.base.x,
+          y: this.base.y,
+          label: 'БАЗА SINGULARIS',
+          color: '#00f0ff'
+        };
+        return;
+      }
+      const colNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+      const colIdx = Math.min(11, Math.max(0, Math.floor((wx / WORLD_SIZE) * 12)));
+      const rowIdx = Math.min(12, Math.max(1, Math.floor((wy / WORLD_SIZE) * 12) + 1));
+      this.waypoint = {
+        x: Math.max(120, Math.min(WORLD_SIZE - 120, wx)),
+        y: Math.max(120, Math.min(WORLD_SIZE - 120, wy)),
+        label: `МАЯК SEC-${colNames[colIdx]}${rowIdx}`,
+        color: '#ffd166'
+      };
+    }
+
+    renderWorldMap() {
+      const canvas = document.getElementById('worldmap-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const stage = canvas.parentElement;
+      const stageRect = stage ? stage.getBoundingClientRect() : { width: 0, height: 0 };
+      const rawSide = Math.min(stageRect.width || 0, stageRect.height || 0);
+      const cssSize = rawSide > 80 ? Math.floor(rawSide - 16) : 640;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+
+      canvas.width = Math.max(1, Math.floor(cssSize * dpr));
+      canvas.height = Math.max(1, Math.floor(cssSize * dpr));
+      canvas.style.width = `${cssSize}px`;
+      canvas.style.height = `${cssSize}px`;
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      const s = cssSize;
+      const scale = s / WORLD_SIZE;
+
+      // Deep tactical background
+      ctx.fillStyle = '#040812';
+      ctx.fillRect(0, 0, s, s);
+
+      // 12x12 sector grid + A..L / 1..12 edge labels
+      const divs = 12;
+      const colNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.11)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < divs; i++) {
+        const pos = (s * i) / divs;
+        ctx.moveTo(pos, 0);
+        ctx.lineTo(pos, s);
+        ctx.moveTo(0, pos);
+        ctx.lineTo(s, pos);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(130, 175, 215, 0.45)';
+      ctx.font = '700 10px "JetBrains Mono", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (let c = 0; c < divs; c++) {
+        ctx.fillText(colNames[c], ((c + 0.5) * s) / divs, 4);
+      }
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      for (let r = 0; r < divs; r++) {
+        ctx.fillText(String(r + 1), 4, ((r + 0.5) * s) / divs);
+      }
+
+      // Outer border
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(0.75, 0.75, s - 1.5, s - 1.5);
+
+      // Base Build Territory circle (radius 2600) + glowing Base Core
+      const bx = this.base.x * scale;
+      const by = this.base.y * scale;
+      const baseZoneR = 2600 * scale;
+
+      ctx.save();
+      ctx.setLineDash([6, 5]);
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.38)';
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.05)';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.arc(bx, by, baseZoneR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.fillStyle = '#00f0ff';
+      ctx.strokeStyle = '#22ffa6';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(bx, by, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#7df9ff';
+      ctx.font = '800 11px "JetBrains Mono", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('БАЗА', bx, by + 11);
+
+      // Anomalies
+      const hoveredAnom = (this._worldMapHover && this._worldMapHover.kind === 'anomaly')
+        ? this._worldMapHover.anomaly
+        : null;
+      for (let i = 0; i < this.anomalies.length; i++) {
+        const a = this.anomalies[i];
+        const ax = a.x * scale;
+        const ay = a.y * scale;
+        const isHover = hoveredAnom === a;
+
+        if (a.cleared) {
+          ctx.fillStyle = 'rgba(34, 255, 166, 0.45)';
+          ctx.beginPath();
+          ctx.arc(ax, ay, isHover ? 6 : 4, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
+
+        ctx.strokeStyle = a.color;
+        ctx.fillStyle = a.color;
+        ctx.lineWidth = isHover ? 2.4 : 1.5;
+        ctx.beginPath();
+        ctx.arc(ax, ay, isHover ? 12 : 8.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(ax, ay, isHover ? 5.5 : 4.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '800 10px "JetBrains Mono", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`T${a.tier}`, ax, ay - 10);
+
+        if (a.hasBoss) {
+          ctx.fillStyle = '#ffb838';
+          ctx.font = '700 8.5px "JetBrains Mono", system-ui, sans-serif';
+          ctx.textBaseline = 'top';
+          ctx.fillText('БОСС', ax, ay + 11);
+        }
+      }
+
+      // Active GPS Waypoint + trajectory line from player
+      if (this.waypoint) {
+        const wx = this.waypoint.x * scale;
+        const wy = this.waypoint.y * scale;
+        const wpCol = this.waypoint.color || '#ffd166';
+
+        if (this.player) {
+          ctx.save();
+          ctx.setLineDash([6, 5]);
+          ctx.strokeStyle = wpCol;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(this.player.x * scale, this.player.y * scale);
+          ctx.lineTo(wx, wy);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.strokeStyle = wpCol;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 10, 0, Math.PI * 2);
+        ctx.moveTo(wx - 14, wy); ctx.lineTo(wx - 6, wy);
+        ctx.moveTo(wx + 6, wy); ctx.lineTo(wx + 14, wy);
+        ctx.moveTo(wx, wy - 14); ctx.lineTo(wx, wy - 6);
+        ctx.moveTo(wx, wy + 6); ctx.lineTo(wx, wy + 14);
+        ctx.stroke();
+
+        if (this.player) {
+          const distM = Math.round(Math.hypot(this.waypoint.x - this.player.x, this.waypoint.y - this.player.y) / 10);
+          ctx.fillStyle = wpCol;
+          ctx.font = '800 10.5px "JetBrains Mono", system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(`${distM}м`, wx, wy - 14);
+        }
+      }
+
+      // Player viewport rect & ship chevron
+      if (this.player) {
+        const vx = this.camera.x * scale;
+        const vy = this.camera.y * scale;
+        const vw = Math.max(10, this.viewport.width * scale);
+        const vh = Math.max(8, this.viewport.height * scale);
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.52)';
+        ctx.lineWidth = 1.1;
+        ctx.strokeRect(vx, vy, vw, vh);
+
+        const px = this.player.x * scale;
+        const py = this.player.y * scale;
+        const ang = typeof this.player.aimAngle === 'number' ? this.player.aimAngle : -Math.PI * 0.5;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(ang);
+        ctx.fillStyle = '#00f0ff';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-6, 5.2);
+        ctx.lineTo(-3, 0);
+        ctx.lineTo(-6, -5.2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.restore();
+
+      // Update inspector info bar
+      const infoEl = document.getElementById('worldmap-info');
+      if (infoEl) {
+        if (hoveredAnom) {
+          const status = hoveredAnom.cleared ? 'ЗАЧИЩЕНА' : (hoveredAnom.hasBoss ? 'АКТИВНА • БОСС' : 'АКТИВНА');
+          const distM = this.player ? Math.round(Math.hypot(hoveredAnom.x - this.player.x, hoveredAnom.y - this.player.y) / 10) : 0;
+          infoEl.textContent = `[T${hoveredAnom.tier}] ${hoveredAnom.name} • ${status} • ${hoveredAnom.wavesTotal} волн • ${distM}м`;
+        } else if (this._worldMapHover && this._worldMapHover.kind === 'base') {
+          const distM = this.player ? Math.round(Math.hypot(this.base.x - this.player.x, this.base.y - this.player.y) / 10) : 0;
+          infoEl.textContent = `БАЗА SINGULARIS • Зона ремонта и строительства (R=260м) • ${distM}м`;
+        } else if (this.waypoint && this.player) {
+          const distM = Math.round(Math.hypot(this.waypoint.x - this.player.x, this.waypoint.y - this.player.y) / 10);
+          infoEl.textContent = `GPS-МАЯК: ${this.waypoint.label} • Дистанция: ${distM}м`;
+        } else if (this._worldMapHover && this._worldMapHover.kind === 'sector') {
+          const colIdx = Math.min(11, Math.max(0, Math.floor((this._worldMapHover.wx / WORLD_SIZE) * 12)));
+          const rowIdx = Math.min(12, Math.max(1, Math.floor((this._worldMapHover.wy / WORLD_SIZE) * 12) + 1));
+          infoEl.textContent = `Сектор ${colNames[colIdx]}${rowIdx} (${Math.round(this._worldMapHover.wx / 10)}м, ${Math.round(this._worldMapHover.wy / 10)}м) • Клик — поставить GPS-маяк`;
+        } else {
+          infoEl.textContent = 'Клик по карте — поставить GPS-маяк • Клик по аномалии — захват цели';
+        }
       }
     }
 
@@ -3474,7 +3889,7 @@ window.SG = window.SG || {};
         aimY,
         firing,
         bulletTime: !!this.keys['Space'] || this.touchInput.bulletTime,
-        speedMult: this.zone === 'overworld' ? 1.55 : 1.0
+        speedMult: this.zone === 'overworld' ? 2.15 : 1.0
       };
 
       // Player updates in personal proper-time (stays fast during Bullet-Time!)
@@ -3701,6 +4116,11 @@ window.SG = window.SG || {};
         }
         if (this.inBaseZone !== wasInBase) {
           this.updateHUD();
+        }
+
+        if (this.waypoint && Math.hypot(this.player.x - this.waypoint.x, this.player.y - this.waypoint.y) < 140) {
+          this.waypoint = null;
+          this.particles.addText(this.player.x, this.player.y - 32, 'ТОЧКА ДОСТИГНУТА', '#ffd166', 1.1, 1.5);
         }
 
         for (let i = 0; i < this.anomalies.length; i++) {
@@ -4950,6 +5370,13 @@ window.SG = window.SG || {};
         }
       }
 
+      if (els.mapBtn) {
+        els.mapBtn.hidden = (this.zone !== 'overworld');
+        if (this.zone === 'overworld') {
+          els.mapBtn.innerHTML = this.isTouchDevice ? 'Карта' : 'Карта <span class="key-hint">[Tab]</span>';
+        }
+      }
+
       if (els.muteBtn) {
         if (this.isTouchDevice) {
           els.muteBtn.textContent = this.audio.muted ? '🔇' : '🔊';
@@ -5145,10 +5572,34 @@ window.SG = window.SG || {};
           SG.Sprites.drawAnomaly(ctx, a, nowSec, isNear);
         }
 
+        // Active GPS Waypoint pulsing beacon in world space
+        if (this.waypoint) {
+          const wx = this.waypoint.x;
+          const wy = this.waypoint.y;
+          const wpCol = this.waypoint.color || '#ffd166';
+          if (wx + 120 >= camX && wx - 120 <= camX + w && wy + 120 >= camY && wy - 120 <= camY + h) {
+            const pulse = 22 + Math.sin(nowSec * 5) * 6;
+            ctx.save();
+            ctx.strokeStyle = wpCol;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(wx, wy, pulse, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(wx, wy, 7, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = wpCol;
+            ctx.font = '800 10.5px "JetBrains Mono", system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.waypoint.label || 'МАЯК', wx, wy - pulse - 8);
+            ctx.restore();
+          }
+        }
+
         if (this.state === 'playing' && this.player) {
           const px = this.player.x;
           const py = this.player.y;
-          const drawCompass = (tx, ty, col, radiusRing, sizeArrow) => {
+          const drawCompass = (tx, ty, col, radiusRing, sizeArrow, showDist = false) => {
             const dx = tx - px;
             const dy = ty - py;
             const d = Math.hypot(dx, dy);
@@ -5168,10 +5619,22 @@ window.SG = window.SG || {};
             ctx.closePath();
             ctx.fill();
             ctx.restore();
+            if (showDist) {
+              ctx.save();
+              ctx.fillStyle = col;
+              ctx.font = '800 10px "JetBrains Mono", system-ui, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(`${Math.round(d / 10)}м`, px + Math.cos(ang) * (radiusRing + 18), py + Math.sin(ang) * (radiusRing + 18));
+              ctx.restore();
+            }
           };
 
           if (Math.hypot(this.base.x - px, this.base.y - py) > 340) {
             drawCompass(this.base.x, this.base.y, '#00f0ff', 68, 7.2);
+          }
+          if (this.waypoint) {
+            drawCompass(this.waypoint.x, this.waypoint.y, this.waypoint.color || '#ffd166', 82, 8.2, true);
           }
           const nearestAnoms = this.anomalies
             .filter(a => !a.cleared)
@@ -5597,9 +6060,10 @@ window.SG = window.SG || {};
         : (this.isTouchDevice || vpW < 760 ? 94 : 124);
       const mx = vpW - size - 14;
       const my = this.isTouchDevice ? 112 : 76;
+      this._minimapRect = isOverworld ? { x: mx, y: my, size } : null;
       const scaleX = size / this.bounds.width;
       const scaleY = size / this.bounds.height;
-      const gridDivs = isOverworld ? 8 : 4;
+      const gridDivs = isOverworld ? 12 : 4;
 
       ctx.save();
       ctx.fillStyle = 'rgba(7, 11, 19, 0.78)';
@@ -5657,6 +6121,18 @@ window.SG = window.SG || {};
             ctx.lineWidth = 0.8;
             ctx.stroke();
           }
+        }
+
+        if (this.waypoint) {
+          const wx = mx + this.waypoint.x * scaleX;
+          const wy = my + this.waypoint.y * scaleY;
+          ctx.fillStyle = this.waypoint.color || '#ffd166';
+          ctx.beginPath();
+          ctx.arc(wx, wy, 3.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.stroke();
         }
       } else if (this.exitPortal) {
         const ex = mx + this.exitPortal.x * scaleX;
@@ -5734,7 +6210,7 @@ window.SG = window.SG || {};
       ctx.textAlign = 'right';
       const zoneTag = this.zone === 'anomaly'
         ? `АНОМАЛИЯ T${this.activeAnomaly ? this.activeAnomaly.tier : 1}`
-        : `МИР • SEC ${col}:${row}`;
+        : `[Tab] КАРТА • SEC ${col}:${row}`;
       ctx.fillText(zoneTag, mx + size - 3, my + size + 11);
 
       ctx.restore();

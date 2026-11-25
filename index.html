@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>SINGULARIS — Архитектор Гравитации</title>
-  <link rel="stylesheet" href="styles.css?v=2.1.0">
+  <link rel="stylesheet" href="styles.css?v=2.2.0">
 </head>
 <body>
   <canvas id="gpu-canvas"></canvas>
@@ -50,6 +50,7 @@
       <div class="btn-row">
         <button type="button" id="btn-hud-menu" class="hud-btn">Меню <span class="key-hint">[Esc]</span></button>
         <button type="button" id="btn-hud-return" class="hud-btn" hidden>На базу <span class="key-hint">[T]</span></button>
+        <button type="button" id="btn-hud-map" class="hud-btn" hidden>Карта <span class="key-hint">[Tab]</span></button>
         <button type="button" id="btn-hud-polarity" class="hud-btn desktop-only-hud">Черная дыра <span class="key-hint">[R]</span></button>
         <button type="button" id="btn-hud-mute" class="hud-btn">Звук: ВКЛ</button>
         <button type="button" id="btn-hud-modules" class="hud-btn desktop-only-hud">Модули <span class="key-hint">[B]</span></button>
@@ -68,7 +69,7 @@
     </div>
   </header>
   <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
-  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v2.1.0</div>
+  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v2.2.0</div>
 
   <!-- Mobile / Tablet Twin-Stick & Ability Arc Controls -->
   <div id="touch-controls" class="touch-controls" hidden>
@@ -196,7 +197,7 @@
 
     <div class="title-footer">
       <div id="title-best-record" class="record-line"></div>
-      <span id="title-version" class="version-pill">Версия v2.1.0</span>
+      <span id="title-version" class="version-pill">Версия v2.2.0</span>
     </div>
   </dialog>
 
@@ -467,6 +468,33 @@
     </div>
   </dialog>
 
+  <!-- Fullscreen Tactical Open-World Map Modal -->
+  <dialog id="worldmap-dialog" aria-labelledby="worldmap-heading">
+    <div class="worldmap-head">
+      <div>
+        <div class="modal-eyebrow">НАВИГАЦИЯ СЕКТОРА • OPEN WORLD</div>
+        <h2 id="worldmap-heading" class="modal-title" style="font-size:20px;margin:0">ТАКТИЧЕСКАЯ КАРТА СЕКТОРА • 24×24 КМ</h2>
+      </div>
+      <div class="worldmap-actions">
+        <button type="button" id="btn-worldmap-clear-wp" class="hud-btn">Сбросить маяк</button>
+        <button type="button" id="btn-worldmap-base" class="hud-btn">На базу <span class="key-hint">[T]</span></button>
+        <button type="button" id="btn-close-worldmap" class="btn-primary" style="padding:7px 14px;font-size:12px">Закрыть [Tab]</button>
+      </div>
+    </div>
+    <div class="worldmap-stage">
+      <canvas id="worldmap-canvas"></canvas>
+    </div>
+    <div class="worldmap-foot">
+      <span id="worldmap-info">Клик по карте — поставить GPS-маяк • Клик по аномалии — захват цели</span>
+      <div class="wm-legend">
+        <span><i class="wm-dot" style="background:#00f0ff"></i>БАЗА</span>
+        <span><i class="wm-dot" style="background:#c06cff"></i>T1–T5</span>
+        <span><i class="wm-dot" style="background:#ffd166"></i>МАЯК</span>
+        <span><i class="wm-dot" style="background:#22ffa6"></i>ЗАЧИЩЕНО</span>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Game Over Summary Modal -->
   <dialog id="gameover-dialog" aria-labelledby="go-heading">
     <div class="modal-eyebrow">КВАНТОВЫЙ КОЛЛАПС КОРПУСА</div>
@@ -492,13 +520,13 @@
     </div>
   </dialog>
 
-  <script src="js/physics.js?v=2.1.0"></script>
-  <script src="js/sprites.js?v=2.1.0"></script>
-  <script src="js/gpu.js?v=2.1.0"></script>
-  <script src="js/audio.js?v=2.1.0"></script>
-  <script src="js/upgrades.js?v=2.1.0"></script>
-  <script src="js/entities.js?v=2.1.0"></script>
-  <script src="js/save.js?v=2.1.0"></script>
-  <script src="js/game.js?v=2.1.0"></script>
+  <script src="js/physics.js?v=2.2.0"></script>
+  <script src="js/sprites.js?v=2.2.0"></script>
+  <script src="js/gpu.js?v=2.2.0"></script>
+  <script src="js/audio.js?v=2.2.0"></script>
+  <script src="js/upgrades.js?v=2.2.0"></script>
+  <script src="js/entities.js?v=2.2.0"></script>
+  <script src="js/save.js?v=2.2.0"></script>
+  <script src="js/game.js?v=2.2.0"></script>
 </body>
 </html>
