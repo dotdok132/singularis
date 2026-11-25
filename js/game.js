@@ -4,10 +4,11 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.2.0';
+  SG.VERSION = 'v2.3.0';
 
   const WORLD_SIZE = 24000;
   const DUNGEON_SIZE = 2200;
+  const ENDLESS_SIZE = 2600;
 
   const ANOMALY_TIERS = {
     1: { color: '#00f0ff', startWave: 1, wavesTotal: 3, hasBoss: false, names: ['ПЕРЕДОВОЙ СБОЙ', 'ОСКОЛОК РОЯ', 'ВНЕШНИЙ ПРОРЫВ'] },
@@ -117,8 +118,11 @@ window.SG = window.SG || {};
       const meta = SG.Save ? SG.Save.loadMeta() : null;
       this.bestScore = meta ? meta.bestScore : Number(localStorage.getItem('singularis_best_score') || 0);
       this.bestWave = meta ? meta.bestWave : Number(localStorage.getItem('singularis_best_wave') || 1);
+      this.bestEndlessWave = meta ? (meta.bestEndlessWave || 0) : 0;
+      this.bestEndlessScore = meta ? (meta.bestEndlessScore || 0) : 0;
       this.totalKills = meta ? meta.totalKills : Number(localStorage.getItem('singularis_total_kills') || 0);
       this.totalAnomaliesCleared = meta ? (meta.totalAnomaliesCleared || 0) : 0;
+      this.gameMode = 'openworld';
       this.settings = this.loadSettings();
       this.buildings = [];
       this.resources = {};
@@ -791,10 +795,13 @@ window.SG = window.SG || {};
       }
     }
 
-    resetRun(startImmediately = true) {
+    resetRun(startImmediately = true, mode = 'openworld') {
       this.cancelUpgradeAnim();
-      this.zone = 'overworld';
-      this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
+      this.gameMode = mode === 'endless' ? 'endless' : 'openworld';
+      const isEndless = this.gameMode === 'endless';
+      this.zone = isEndless ? 'endless' : 'overworld';
+      const arenaSize = isEndless ? ENDLESS_SIZE : WORLD_SIZE;
+      this.bounds = { width: arenaSize, height: arenaSize };
       this.activeAnomaly = null;
       this.anomalyCleared = false;
       this.dungeonWaveIndex = 0;
@@ -804,11 +811,17 @@ window.SG = window.SG || {};
       this.waypoint = null;
       this._worldMapHover = null;
 
-      this.initOverworldEntities();
       this.buildings = [];
       this.resources = {};
       this._autoSaveTimer = 0;
-      this.player = new SG.Player(this.base.x, this.base.y + 145);
+      if (isEndless) {
+        this.anomalies = [];
+        this.base = { x: ENDLESS_SIZE * 0.5, y: ENDLESS_SIZE * 0.5, radius: 64, repairRadius: 210 };
+        this.player = new SG.Player(ENDLESS_SIZE * 0.5, ENDLESS_SIZE * 0.5);
+      } else {
+        this.initOverworldEntities();
+        this.player = new SG.Player(this.base.x, this.base.y + 145);
+      }
       this.overworldPos = { x: this.player.x, y: this.player.y };
       this.initLandmarks();
       this.snapCameraToPlayer();
@@ -856,12 +869,16 @@ window.SG = window.SG || {};
 
       if (startImmediately) {
         this.state = 'playing';
-        this.waveBannerTitle = 'ОТКРЫТЫЙ МИР // БАЗА';
-        this.waveSubtitle = 'ЗАЛЕТИТЕ В ЛЮБУЮ АНОМАЛИЮ ДЛЯ ЗАЧИСТКИ';
-        this.waveBannerColor = '#00f0ff';
-        this.waveBannerTimer = 3.2;
         this.closeAllDialogs();
-        this.saveProgress('new_run');
+        if (this.gameMode === 'endless') {
+          this.startWave(1);
+        } else {
+          this.waveBannerTitle = 'ОТКРЫТЫЙ МИР // БАЗА';
+          this.waveSubtitle = 'ЗАЛЕТИТЕ В ЛЮБУЮ АНОМАЛИЮ ДЛЯ ЗАЧИСТКИ';
+          this.waveBannerColor = '#00f0ff';
+          this.waveBannerTimer = 3.2;
+          this.saveProgress('new_run');
+        }
       }
       this.updateHUD();
     }
@@ -1269,6 +1286,7 @@ window.SG = window.SG || {};
 
     returnToBase() {
       if (this.state !== 'playing' || !this.player) return;
+      if (this.zone === 'endless') return;
       if (this.zone === 'anomaly') {
         if (this.anomalyCleared) {
           this.exitAnomalyToOverworld(true);
@@ -1353,6 +1371,19 @@ window.SG = window.SG || {};
     saveProgress(reason = 'auto') {
       if (!SG.Save || !this.player) return false;
       if (this.state === 'title' || this.state === 'gameover') return false;
+      if (this.gameMode === 'endless') {
+        if (this.score > this.bestEndlessScore) this.bestEndlessScore = this.score;
+        if (this.wave > this.bestEndlessWave) this.bestEndlessWave = this.wave;
+        SG.Save.saveMeta({
+          bestScore: this.bestScore,
+          bestWave: this.bestWave,
+          bestEndlessScore: this.bestEndlessScore,
+          bestEndlessWave: this.bestEndlessWave,
+          totalKills: this.totalKills,
+          totalAnomaliesCleared: this.totalAnomaliesCleared || 0
+        });
+        return true;
+      }
       const snap = this.buildSaveSnapshot();
       const ok = SG.Save.write(snap);
       if (ok) {
@@ -1363,6 +1394,8 @@ window.SG = window.SG || {};
         SG.Save.saveMeta({
           bestScore: this.bestScore,
           bestWave: this.bestWave,
+          bestEndlessScore: this.bestEndlessScore || 0,
+          bestEndlessWave: this.bestEndlessWave || 0,
           totalKills: this.totalKills,
           totalAnomaliesCleared: this.totalAnomaliesCleared || 0
         });
@@ -1382,6 +1415,7 @@ window.SG = window.SG || {};
       this.cancelUpgradeAnim();
       this.clearInputs();
       this._subModalOrigin = null;
+      this.gameMode = 'openworld';
 
       this.settings.difficulty = DIFFICULTIES[saved.difficulty] ? saved.difficulty : 'normal';
       this.saveSettings();
@@ -1553,8 +1587,14 @@ window.SG = window.SG || {};
         if (startBtn) {
           startBtn.classList.remove('btn-secondary');
           startBtn.classList.add('btn-primary');
-          startBtn.textContent = 'ИГРАТЬ';
+          startBtn.textContent = 'ОТКРЫТЫЙ МИР';
         }
+      }
+      const endlessBtn = document.getElementById('btn-start-endless');
+      if (endlessBtn) {
+        endlessBtn.textContent = this.bestEndlessWave > 0
+          ? `∞ МАХАЧ (РЕКОРД: В.${this.bestEndlessWave.toLocaleString('ru-RU')})`
+          : '∞ БЕСКОНЕЧНЫЙ МАХАЧ';
       }
     }
 
@@ -1826,8 +1866,16 @@ window.SG = window.SG || {};
 
       document.getElementById('btn-start-play').addEventListener('click', () => {
         this.audio.init();
-        this.resetRun(true);
+        this.resetRun(true, 'openworld');
       });
+
+      const startEndlessBtn = document.getElementById('btn-start-endless');
+      if (startEndlessBtn) {
+        startEndlessBtn.addEventListener('click', () => {
+          this.audio.init();
+          this.resetRun(true, 'endless');
+        });
+      }
 
       document.getElementById('btn-open-settings-title').addEventListener('click', () => {
         this.openSettings('title');
@@ -1950,7 +1998,7 @@ window.SG = window.SG || {};
 
       document.getElementById('btn-pause-restart').addEventListener('click', () => {
         this.audio.init();
-        this.resetRun(true);
+        this.resetRun(true, this.gameMode);
       });
 
       document.getElementById('btn-pause-settings').addEventListener('click', () => {
@@ -2220,7 +2268,7 @@ window.SG = window.SG || {};
 
       document.getElementById('btn-restart').addEventListener('click', () => {
         this.audio.init();
-        this.resetRun(true);
+        this.resetRun(true, this.gameMode);
       });
 
       document.getElementById('btn-go-mainmenu').addEventListener('click', () => {
@@ -2242,9 +2290,12 @@ window.SG = window.SG || {};
     updateTitleBest() {
       const el = document.getElementById('title-best-record');
       if (el) {
+        const endlessSuffix = this.bestEndlessWave > 0
+          ? ` • ∞ Махач: Волна ${this.bestEndlessWave.toLocaleString('ru-RU')}`
+          : '';
         el.textContent = this.bestScore > 0
-          ? `Рекорд: ${this.bestScore.toLocaleString('ru-RU')} очк. • Волна ${this.bestWave} • Всего уничтожено: ${this.totalKills}`
-          : 'Первый запуск квантового ядра';
+          ? `Рекорд: ${this.bestScore.toLocaleString('ru-RU')} очк. • Волна ${this.bestWave} • Всего уничтожено: ${this.totalKills}${endlessSuffix}`
+          : `Первый запуск квантового ядра${endlessSuffix}`;
       }
       this.updateTitleSaveUI();
     }
@@ -2271,7 +2322,9 @@ window.SG = window.SG || {};
         const m = p.mods;
         const armorPct = Math.round(Math.min(0.75, m.armor) * 100);
         const gravPct = Math.round(m.wellGravMult * 100);
-        summary.textContent = `Волна ${this.wave} • Ур. ${this.level} • ${diff.label} • HP ${Math.ceil(p.hp)}/${p.maxHp} • Броня ${armorPct}% • Грав ${gravPct}% • Автосохранение ✓`;
+        summary.textContent = this.gameMode === 'endless'
+          ? `∞ МАХАЧ • Волна ${this.wave.toLocaleString('ru-RU')} • Ур. ${this.level} • ${diff.label} • HP ${Math.ceil(p.hp)}/${p.maxHp} • Броня ${armorPct}% • Грав ${gravPct}%`
+          : `Волна ${this.wave} • Ур. ${this.level} • ${diff.label} • HP ${Math.ceil(p.hp)}/${p.maxHp} • Броня ${armorPct}% • Грав ${gravPct}% • Автосохранение ✓`;
       }
       const pillsEl = document.getElementById('pause-upgrades');
       if (pillsEl) {
@@ -2983,20 +3036,30 @@ window.SG = window.SG || {};
     computeWaveScaling(waveNum) {
       const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
       const w = Math.max(1, waveNum || 1);
-      const linearPart = 1 + (w - 1) * 0.28;
-      const expPart = w <= 3 ? 1.0 : Math.pow(1.135, w - 3);
+      let waveScale;
+      if (w <= 20) {
+        const linearPart = 1 + (w - 1) * 0.28;
+        const expPart = w <= 3 ? 1.0 : Math.pow(1.135, w - 3);
+        waveScale = linearPart * expPart;
+      } else {
+        const baseAt20 = (1 + 19 * 0.28) * Math.pow(1.135, 17);
+        const extra = w - 20;
+        waveScale = baseAt20 * (1 + extra * 0.16 + Math.pow(extra, 1.35) * 0.03);
+      }
       const evoCount = this.evolvedUpgrades ? this.evolvedUpgrades.size : 0;
       const levelFactor = 1 + Math.max(0, (this.level || 1) - 4) * 0.065 + evoCount * 0.16;
-      const hpScale = linearPart * expPart * levelFactor * diffCfg.enemyScale;
-      const bossScale = hpScale * Math.min(1.15, 0.72 + w * 0.015);
+      const hpScale = Math.min(1e12, waveScale * levelFactor * diffCfg.enemyScale);
+      const bossScale = Math.min(1e12, hpScale * Math.min(1.15, 0.72 + Math.min(w, 1000) * 0.015));
       return { hpScale, bossScale };
     }
 
     getEnemyDamageScale() {
       const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
       const w = Math.max(1, this.wave || 1);
-      const waveDmg = 1 + (w - 1) * 0.10 + Math.pow(Math.max(0, w - 8), 1.25) * 0.04;
-      return (diffCfg.dmgScale || 1.0) * waveDmg;
+      const waveDmg = w <= 20
+        ? (1 + (w - 1) * 0.10 + Math.pow(Math.max(0, w - 8), 1.25) * 0.04)
+        : (1 + 19 * 0.10 + Math.pow(12, 1.25) * 0.04 + Math.pow(w - 20, 0.85) * 0.22);
+      return Math.min(1e6, (diffCfg.dmgScale || 1.0) * waveDmg);
     }
 
     spawnBullet(opts) {
@@ -3118,10 +3181,16 @@ window.SG = window.SG || {};
 
     startWave(waveNum) {
       this.wave = waveNum;
-      this.waveBannerTitle = this.zone === 'anomaly'
-        ? `ВОЛНА ${this.dungeonWaveIndex}/${this.dungeonWavesTotal}`
-        : `ВОЛНА ${waveNum}`;
-      this.waveBannerColor = this.activeAnomaly ? this.activeAnomaly.color : null;
+      const isEndless = this.zone === 'endless';
+      if (isEndless) {
+        this.waveBannerTitle = `∞ МАХАЧ • ВОЛНА ${waveNum.toLocaleString('ru-RU')}`;
+        this.waveBannerColor = (waveNum % 5 === 0) ? '#ff3b6b' : '#ffb838';
+      } else {
+        this.waveBannerTitle = this.zone === 'anomaly'
+          ? `ВОЛНА ${this.dungeonWaveIndex}/${this.dungeonWavesTotal}`
+          : `ВОЛНА ${waveNum}`;
+        this.waveBannerColor = this.activeAnomaly ? this.activeAnomaly.color : null;
+      }
       this.waveBannerTimer = 2.8;
       this.waveQueue = [];
 
@@ -3133,14 +3202,26 @@ window.SG = window.SG || {};
       }
 
       const { hpScale, bossScale } = this.computeWaveScaling(waveNum);
-      const eliteChance = Math.min(0.45, Math.max(0, (waveNum - 3) * 0.045));
+      const eliteChance = isEndless
+        ? Math.min(0.65, Math.max(0, (waveNum - 3) * 0.045))
+        : Math.min(0.45, Math.max(0, (waveNum - 3) * 0.045));
       const isBossWave = waveNum % 5 === 0;
 
       if (isBossWave) {
-        const bossType = (waveNum % 10 === 0) ? 'boss_archon' : 'boss_leviathan';
-        this.waveSubtitle = `ТРЕВОГА // ${SG.ENEMY_TYPES[bossType].name}`;
-        this.waveQueue.push({ type: bossType, scale: bossScale, wave: waveNum, isElite: false });
-        const escortCount = 5 + Math.floor(waveNum * 0.7);
+        const bossCount = isEndless
+          ? (waveNum >= 100 ? 4 : (waveNum >= 50 ? 3 : (waveNum >= 20 ? 2 : 1)))
+          : 1;
+        const primaryBoss = (waveNum % 10 === 0) ? 'boss_archon' : 'boss_leviathan';
+        this.waveSubtitle = bossCount > 1
+          ? `ТРЕВОГА ×${bossCount} // РОЙ БОССОВ`
+          : `ТРЕВОГА // ${SG.ENEMY_TYPES[primaryBoss].name}`;
+        for (let b = 0; b < bossCount; b++) {
+          const bossType = ((waveNum + b) % 2 === 0) ? 'boss_archon' : 'boss_leviathan';
+          this.waveQueue.push({ type: bossType, scale: bossScale, wave: waveNum, isElite: false });
+        }
+        const escortCount = isEndless
+          ? Math.min(60, 6 + Math.floor(waveNum * 0.8))
+          : Math.min(40, 5 + Math.floor(waveNum * 0.7));
         for (let i = 0; i < escortCount; i++) {
           let eType = i % 2 === 0 ? 'swarmer' : 'sniper';
           if (i % 5 === 1 && waveNum >= 5) eType = 'phalanx';
@@ -3153,7 +3234,9 @@ window.SG = window.SG || {};
         this.particles.addText(
           this.player.x,
           this.player.y - 120,
-          `БОСС ВОЛНЫ ${waveNum}: ${SG.ENEMY_TYPES[bossType].name}!`,
+          bossCount > 1
+            ? `БОСС-ВОЛНА ${waveNum.toLocaleString('ru-RU')}: ×${bossCount} БОССА!`
+            : `БОСС ВОЛНЫ ${waveNum.toLocaleString('ru-RU')}: ${SG.ENEMY_TYPES[primaryBoss].name}!`,
           '#ff3b6b',
           1.45,
           2.4
@@ -3166,8 +3249,12 @@ window.SG = window.SG || {};
           'ПРОРЫВ ПЕРИМЕТРА',
           'КРИТИЧЕСКАЯ ПЛОТНОСТЬ'
         ];
-        this.waveSubtitle = subtitles[(waveNum - 1) % subtitles.length];
-        const budget = Math.min(110, 6 + waveNum * 3 + Math.floor(Math.max(0, waveNum - 6) * 1.5));
+        this.waveSubtitle = isEndless && waveNum >= 20
+          ? 'БЕСКОНЕЧНЫЙ МАХАЧ // ПЕРЕГРУЗКА'
+          : subtitles[(waveNum - 1) % subtitles.length];
+        const budget = isEndless
+          ? Math.min(130, 8 + waveNum * 3 + Math.floor(Math.max(0, waveNum - 6) * 1.5))
+          : Math.min(110, 6 + waveNum * 3 + Math.floor(Math.max(0, waveNum - 6) * 1.5));
         const minElites = waveNum >= 6 ? Math.min(6, Math.floor((waveNum - 4) / 2)) : 0;
         let elitesAssigned = 0;
         const elitePool = ['phalanx', 'pulsar', 'weaver', 'sniper', 'swarmer'];
@@ -3518,17 +3605,27 @@ window.SG = window.SG || {};
 
     checkLevelUp() {
       if (this.xp >= this.xpNext && this.state === 'playing') {
-        this.xp -= this.xpNext;
-        this.level++;
-        this.xpNext = this.computeNextXp(this.level);
         if (SG.rollUpgradeChoices(this.upgradeStacks, 1, this.evolvedUpgrades).length === 0) {
-          this.player.hp = Math.min(this.player.maxHp, this.player.hp + 15);
-          this.player.shield = Math.min(this.player.maxShield, this.player.shield + 20);
-          this.player.mods.scoreMultBonus += 0.05;
-          this.particles.addText(this.player.x, this.player.y - 30, 'ВСЕ МОДУЛИ MAX • ПЕРЕГРУЗКА ЯДРА!', '#ffd166', 1.18, 1.4);
+          let loops = 0;
+          while (this.xp >= this.xpNext && loops < 10) {
+            this.xp -= this.xpNext;
+            this.level++;
+            this.xpNext = this.computeNextXp(this.level);
+            this.player.mods.damageMult *= 1.06;
+            this.player.maxHp = Math.round(this.player.maxHp * 1.04);
+            this.player.maxShield = Math.round(this.player.maxShield * 1.04);
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.2);
+            this.player.shield = Math.min(this.player.maxShield, this.player.shield + this.player.maxShield * 0.2);
+            this.player.mods.scoreMultBonus += 0.05;
+            loops++;
+          }
+          this.particles.addText(this.player.x, this.player.y - 30, 'ПЕРЕГРУЗКА ЯДРА: +6% УРОН • +4% HP!', '#ffd166', 1.18, 1.4);
           this.updateHUD();
           return;
         }
+        this.xp -= this.xpNext;
+        this.level++;
+        this.xpNext = this.computeNextXp(this.level);
         this.openUpgradeModal();
       }
     }
@@ -3743,21 +3840,32 @@ window.SG = window.SG || {};
 
     triggerGameOver() {
       this.clearInputs();
-      this.clearRunSave();
+      const isEndless = this.gameMode === 'endless';
+      if (!isEndless) {
+        this.clearRunSave();
+      }
       this.state = 'gameover';
       this.updateHUD();
 
-      const isNewRecord = this.score > this.bestScore && this.score > 0;
-      if (this.score > this.bestScore) {
-        this.bestScore = this.score;
+      let isNewRecord = false;
+      if (isEndless) {
+        const prevScore = this.bestEndlessScore || 0;
+        const prevWave = this.bestEndlessWave || 0;
+        isNewRecord = (this.score > prevScore && this.score > 0) || (this.wave > prevWave);
+        if (this.score > this.bestEndlessScore) this.bestEndlessScore = this.score;
+        if (this.wave > this.bestEndlessWave) this.bestEndlessWave = this.wave;
+      } else {
+        isNewRecord = this.score > this.bestScore && this.score > 0;
+        if (this.score > this.bestScore) this.bestScore = this.score;
+        if (this.wave > this.bestWave) this.bestWave = this.wave;
       }
-      if (this.wave > this.bestWave) {
-        this.bestWave = this.wave;
-      }
+
       if (SG.Save) {
         SG.Save.saveMeta({
           bestScore: this.bestScore,
           bestWave: this.bestWave,
+          bestEndlessScore: this.bestEndlessScore || 0,
+          bestEndlessWave: this.bestEndlessWave || 0,
           totalKills: this.totalKills,
           totalAnomaliesCleared: this.totalAnomaliesCleared || 0
         });
@@ -3769,9 +3877,16 @@ window.SG = window.SG || {};
       const recBadge = document.getElementById('go-record-badge');
       if (recBadge) recBadge.hidden = !isNewRecord;
 
+      const goHeading = document.getElementById('go-heading');
+      if (goHeading) {
+        goHeading.textContent = isEndless ? 'Коллапс в Бесконечном Махаче' : 'Миссия завершена';
+      }
+
       document.getElementById('go-score').textContent = this.score.toLocaleString('ru-RU');
-      document.getElementById('go-best').textContent = this.bestScore.toLocaleString('ru-RU');
-      document.getElementById('go-wave').textContent = `${this.stats.anomaliesCleared || 0} / В.${this.wave}`;
+      document.getElementById('go-best').textContent = (isEndless ? this.bestEndlessScore : this.bestScore).toLocaleString('ru-RU');
+      document.getElementById('go-wave').textContent = isEndless
+        ? `∞ ВОЛНА ${this.wave.toLocaleString('ru-RU')}`
+        : `${this.stats.anomaliesCleared || 0} / В.${this.wave}`;
       document.getElementById('go-kills').textContent = String(this.stats.kills);
       document.getElementById('go-slingshots').textContent = String(this.stats.slingshots);
       document.getElementById('go-hijacks').textContent = String(this.stats.hijacks);
@@ -4138,6 +4253,33 @@ window.SG = window.SG || {};
             }
           } else {
             a.enterProgress = Math.max(0, a.enterProgress - dt * 1.8);
+          }
+        }
+      } else if (this.zone === 'endless') {
+        // Endless Mode Non-Stop Arena Brawl (infinite waves)
+        if (this.waveQueue.length > 0) {
+          this.waveSpawnTimer -= worldDt;
+          const maxActive = Math.min(72, 22 + Math.floor(this.wave * 2.5));
+          if (this.waveSpawnTimer <= 0 && this.enemies.length < maxActive) {
+            const batch = this.wave >= 25 ? 5 : (this.wave >= 12 ? 4 : (this.wave >= 5 ? 3 : 2));
+            for (let bi = 0; bi < batch && this.waveQueue.length > 0 && this.enemies.length < maxActive; bi++) {
+              this.spawnFromWaveQueue();
+            }
+            this.waveSpawnTimer = Math.max(0.14, 0.48 - Math.min(0.34, this.wave * 0.014));
+          }
+        } else if (this.enemies.length === 0) {
+          if (this.wave % 5 === 0) {
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.20);
+            this.player.shield = this.player.maxShield;
+            this.rerolls++;
+            this.particles.addText(this.player.x, this.player.y - 34, 'БОСС ПОВЕРЖЕН • +1 ПЕРЕБРОС • ЩИТ 100%', '#ffd166', 1.18, 1.8);
+          } else {
+            this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.08);
+            this.player.shield = Math.min(this.player.maxShield, this.player.shield + this.player.maxShield * 0.25);
+          }
+          this.startWave(this.wave + 1);
+          if (this.wave > this.bestEndlessWave) {
+            this.saveProgress('endless_wave');
           }
         }
       } else {
@@ -5289,6 +5431,8 @@ window.SG = window.SG || {};
           els.wave.textContent = this.inBaseZone
             ? 'БАЗА • РЕМОНТ'
             : `МИР • ЗАЧИЩЕНО: ${this.stats ? (this.stats.anomaliesCleared || 0) : 0}`;
+        } else if (this.zone === 'endless') {
+          els.wave.textContent = `∞ ВОЛНА ${this.wave.toLocaleString('ru-RU')} • ☠ ${this.enemies.length + this.waveQueue.length}`;
         } else if (this.anomalyCleared) {
           els.wave.textContent = 'АНОМАЛИЯ ЗАЧИЩЕНА';
         } else {
@@ -5970,7 +6114,7 @@ window.SG = window.SG || {};
       if (this.state === 'playing' && this.waveBannerTimer > 0) {
         const t = this.waveBannerTimer;
         const alpha = Math.min(1, t * 2.2, (3.6 - t) * 3.2 + 0.2);
-        const isBossW = this.zone === 'anomaly' && !this.anomalyCleared && (this.wave % 5 === 0);
+        const isBossW = ((this.zone === 'anomaly' && !this.anomalyCleared) || this.zone === 'endless') && (this.wave % 5 === 0);
         const accentCol = this.waveBannerColor || (isBossW ? '#ff3b6b' : '#00f0ff');
         const titleTxt = this.waveBannerTitle || `ВОЛНА ${this.wave}`;
         ctx.save();
@@ -6205,12 +6349,16 @@ window.SG = window.SG || {};
       // Radar coordinate label
       const col = Math.min(gridDivs, Math.max(1, Math.floor((this.player.x / this.bounds.width) * gridDivs) + 1));
       const row = Math.min(gridDivs, Math.max(1, Math.floor((this.player.y / this.bounds.height) * gridDivs) + 1));
-      ctx.fillStyle = this.zone === 'anomaly' && this.activeAnomaly ? this.activeAnomaly.color : 'rgba(180, 200, 224, 0.78)';
+      ctx.fillStyle = this.zone === 'endless'
+        ? ((this.wave % 5 === 0) ? '#ff3b6b' : '#ffb838')
+        : (this.zone === 'anomaly' && this.activeAnomaly ? this.activeAnomaly.color : 'rgba(180, 200, 224, 0.78)');
       ctx.font = '700 9px "JetBrains Mono", system-ui, sans-serif';
       ctx.textAlign = 'right';
-      const zoneTag = this.zone === 'anomaly'
-        ? `АНОМАЛИЯ T${this.activeAnomaly ? this.activeAnomaly.tier : 1}`
-        : `[Tab] КАРТА • SEC ${col}:${row}`;
+      const zoneTag = this.zone === 'endless'
+        ? `∞ ВОЛНА ${this.wave.toLocaleString('ru-RU')}`
+        : (this.zone === 'anomaly'
+          ? `АНОМАЛИЯ T${this.activeAnomaly ? this.activeAnomaly.tier : 1}`
+          : `[Tab] КАРТА • SEC ${col}:${row}`);
       ctx.fillText(zoneTag, mx + size - 3, my + size + 11);
 
       ctx.restore();

@@ -83,6 +83,8 @@ window.SG = window.SG || {};
       return {
         bestScore: Math.max(legacyScore, toFinite(parsed && parsed.bestScore, 0)),
         bestWave: Math.max(1, legacyWave, toFinite(parsed && parsed.bestWave, 1)),
+        bestEndlessWave: Math.max(0, toFinite(parsed && parsed.bestEndlessWave, 0)),
+        bestEndlessScore: Math.max(0, toFinite(parsed && parsed.bestEndlessScore, 0)),
         totalKills: Math.max(legacyKills, toFinite(parsed && parsed.totalKills, 0)),
         totalAnomaliesCleared: Math.max(0, toFinite(parsed && parsed.totalAnomaliesCleared, 0)),
         firstVersion: (parsed && typeof parsed.firstVersion === 'string') ? parsed.firstVersion : (SG.VERSION || 'v2.1.0'),
@@ -97,6 +99,8 @@ window.SG = window.SG || {};
       const next = {
         bestScore: Math.max(cur.bestScore, Math.floor(toFinite(meta.bestScore, 0))),
         bestWave: Math.max(1, cur.bestWave, Math.floor(toFinite(meta.bestWave, 1))),
+        bestEndlessWave: Math.max(cur.bestEndlessWave || 0, Math.floor(toFinite(meta.bestEndlessWave, 0))),
+        bestEndlessScore: Math.max(cur.bestEndlessScore || 0, Math.floor(toFinite(meta.bestEndlessScore, 0))),
         totalKills: Math.max(cur.totalKills, Math.floor(toFinite(meta.totalKills, 0))),
         totalAnomaliesCleared: Math.max(cur.totalAnomaliesCleared, Math.floor(toFinite(meta.totalAnomaliesCleared, 0))),
         firstVersion: cur.firstVersion || SG.VERSION || 'v2.1.0',
