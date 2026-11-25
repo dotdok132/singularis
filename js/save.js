@@ -179,7 +179,8 @@ window.SG = window.SG || {};
           name: (typeof a.name === 'string' && a.name) ? a.name : '',
           x: clamp(toFinite(a.x, baseX + 1600) * scale, minCoord, maxCoord),
           y: clamp(toFinite(a.y, baseY) * scale, minCoord, maxCoord),
-          cleared: !!a.cleared
+          cleared: !!a.cleared,
+          respawnTimer: a.cleared ? Math.max(0, toFinite(a.respawnTimer, 0)) : 0
         });
       }
 

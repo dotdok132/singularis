@@ -254,189 +254,213 @@
   </dialog>
 
   <!-- Settings Modal -->
-  <dialog id="settings-dialog" aria-labelledby="settings-heading">
-    <div class="modal-eyebrow" data-i18n="set.eyebrow">КОНФИГУРАЦИЯ ЯДРА</div>
-    <h2 id="settings-heading" class="modal-title" style="font-size:28px" data-i18n="set.heading">Настройки</h2>
-    <p class="modal-sub" data-i18n="set.sub">Изменения применяются мгновенно и сохраняются автоматически.</p>
-
-    <div class="settings-list">
-      <label class="setting-row" for="set-lang">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.langTitle">Язык интерфейса</span>
-          <span class="setting-desc" data-i18n="set.langDesc">English / Русский / Українська / Español — применяется мгновенно</span>
-        </div>
-        <div class="setting-control">
-          <select id="set-lang" class="setting-select">
-            <option value="en">English</option>
-            <option value="ru" selected>Русский</option>
-            <option value="uk">Українська</option>
-            <option value="es">Español</option>
-          </select>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-quality">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.qualTitle">Режим графики</span>
-          <span class="setting-desc" data-i18n="set.qualDesc">Слабый ПК (макс. FPS) / Мощный ПК (ультра частицы и сетка)</span>
-        </div>
-        <div class="setting-control">
-          <select id="set-quality" class="setting-select">
-            <option value="low" data-i18n="set.qualLow">Слабый ПК</option>
-            <option value="medium" selected data-i18n="set.qualMed">Баланс</option>
-            <option value="high" data-i18n="set.qualHigh">Мощный ПК</option>
-          </select>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-gpu">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.gpuTitle">Аппаратное ускорение GPU</span>
-          <span class="setting-desc" data-i18n-html="set.gpuDesc">WebGL шейдеры для сетки, туманности и частиц (<span id="gpu-backend-label">проверка...</span>)</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-gpu" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-textures">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.texTitle">Текстуры (стиль Mindustry)</span>
-          <span class="setting-desc" data-i18n="set.texDesc">Детализированные спрайты кораблей, врагов и сектора арены</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-textures" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-fps">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.fpsTitle">Счетчик FPS и GPU</span>
-          <span class="setting-desc" data-i18n="set.fpsDesc">Показывать нагрузку и бэкенд рендера в левом нижнем углу</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-fps" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-music-vol">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.musicTitle">Громкость музыки</span>
-          <span class="setting-desc" data-i18n="set.musicDesc">Процедурный адаптивный синтезатор</span>
-        </div>
-        <div class="setting-control">
-          <input type="range" id="set-music-vol" min="0" max="100" value="60">
-          <span id="val-music-vol" class="setting-val">60%</span>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-sfx-vol">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.sfxTitle">Громкость эффектов (SFX)</span>
-          <span class="setting-desc" data-i18n="set.sfxDesc">Выстрелы, пращи, взрывы, перемотка времени</span>
-        </div>
-        <div class="setting-control">
-          <input type="range" id="set-sfx-vol" min="0" max="100" value="85">
-          <span id="val-sfx-vol" class="setting-val">85%</span>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-shake">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.shakeTitle">Тряска камеры</span>
-          <span class="setting-desc" data-i18n="set.shakeDesc">Динамическая отдача при взрывах и попаданиях</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-shake" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-trajectory">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.trajTitle">Предпросмотр грави-дуги</span>
-          <span class="setting-desc" data-i18n="set.trajDesc">Пунктирная линия искривления прицела возле черных дыр</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-trajectory" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-touch-mode">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.touchModeTitle">Сенсорное управление</span>
-          <span class="setting-desc" data-i18n="set.touchModeDesc">Экранные стики и кнопки для телефона и планшета</span>
-        </div>
-        <div class="setting-control">
-          <select id="set-touch-mode" class="setting-select">
-            <option value="auto" selected data-i18n="set.touchAuto">Авто</option>
-            <option value="on" data-i18n="set.touchOn">Всегда вкл</option>
-            <option value="off" data-i18n="set.touchOff">Выкл</option>
-          </select>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-touch-floating">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.touchFloatTitle">Плавающий джойстик</span>
-          <span class="setting-desc" data-i18n="set.touchFloatDesc">Левый стик появляется там, где коснулся палец</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-touch-floating" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-touch-autofire">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.touchAutoFireTitle">Авто-стрельба (сенсор)</span>
-          <span class="setting-desc" data-i18n="set.touchAutoFireDesc">Автоматический огонь по направлению прицела при наличии врагов</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-touch-autofire">
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-touch-canvas-well">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.touchWellTitle">Тап по полю = Дыра</span>
-          <span class="setting-desc" data-i18n="set.touchWellDesc">Нажатие или перетягивание по арене ставит гравитационную дыру</span>
-        </div>
-        <div class="setting-control">
-          <input type="checkbox" id="set-touch-canvas-well" checked>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-touch-scale">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.touchScaleTitle">Размер кнопок (телефон)</span>
-          <span class="setting-desc" data-i18n="set.touchScaleDesc">Масштаб сенсорных кнопок и джойстиков на экране</span>
-        </div>
-        <div class="setting-control">
-          <input type="range" id="set-touch-scale" min="75" max="150" step="5" value="100">
-          <span id="val-touch-scale" class="setting-val">100%</span>
-        </div>
-      </label>
-
-      <label class="setting-row" for="set-touch-opacity">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.touchOpacityTitle">Прозрачность кнопок (телефон)</span>
-          <span class="setting-desc" data-i18n="set.touchOpacityDesc">Видимость сенсорного управления поверх поля боя</span>
-        </div>
-        <div class="setting-control">
-          <input type="range" id="set-touch-opacity" min="30" max="100" step="5" value="80">
-          <span id="val-touch-opacity" class="setting-val">80%</span>
-        </div>
-      </label>
-
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-title" data-i18n="set.saveTitle">Сквозь-патчевое сохранение</span>
-          <span class="setting-desc" id="save-io-status" data-i18n="set.saveDesc">Прогресс переносится между обновлениями. Экспорт или импорт кода.</span>
-        </div>
-        <div class="setting-control setting-btn-group">
-          <button type="button" id="btn-export-save" class="hud-btn" data-i18n="set.export">Экспорт</button>
-          <button type="button" id="btn-import-save" class="hud-btn" data-i18n="set.import">Импорт</button>
-        </div>
+  <dialog id="settings-dialog" class="settings-wide" aria-labelledby="settings-heading">
+    <div class="settings-header">
+      <div>
+        <div class="modal-eyebrow" data-i18n="set.eyebrow">КОНФИГУРАЦИЯ ЯДРА</div>
+        <h2 id="settings-heading" class="modal-title" style="font-size:30px" data-i18n="set.heading">Настройки</h2>
+        <p class="modal-sub" data-i18n="set.sub">Изменения применяются мгновенно и сохраняются автоматически.</p>
       </div>
+    </div>
+
+    <div class="settings-categories">
+      <section class="settings-section">
+        <div class="settings-cat-head" data-i18n="set.catGraphics">ГРАФИКА И РЕНДЕР</div>
+        <div class="settings-list">
+          <label class="setting-row" for="set-quality">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.qualTitle">Режим графики</span>
+              <span class="setting-desc" data-i18n="set.qualDesc">Слабый ПК (макс. FPS) / Мощный ПК (ультра частицы и сетка)</span>
+            </div>
+            <div class="setting-control">
+              <select id="set-quality" class="setting-select">
+                <option value="low" data-i18n="set.qualLow">Слабый ПК</option>
+                <option value="medium" selected data-i18n="set.qualMed">Баланс</option>
+                <option value="high" data-i18n="set.qualHigh">Мощный ПК</option>
+              </select>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-gpu">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.gpuTitle">Аппаратное ускорение GPU</span>
+              <span class="setting-desc" data-i18n-html="set.gpuDesc">WebGL шейдеры для сетки, туманности и частиц (<span id="gpu-backend-label">проверка...</span>)</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-gpu" checked>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-textures">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.texTitle">Текстуры (стиль Mindustry)</span>
+              <span class="setting-desc" data-i18n="set.texDesc">Детализированные спрайты кораблей, врагов и сектора арены</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-textures" checked>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-fps">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.fpsTitle">Счетчик FPS и GPU</span>
+              <span class="setting-desc" data-i18n="set.fpsDesc">Показывать нагрузку и бэкенд рендера в левом нижнем углу</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-fps" checked>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-cat-head" data-i18n="set.catAudio">ЗВУК И ЭФФЕКТЫ</div>
+        <div class="settings-list">
+          <label class="setting-row" for="set-music-vol">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.musicTitle">Громкость музыки</span>
+              <span class="setting-desc" data-i18n="set.musicDesc">Процедурный адаптивный синтезатор</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="set-music-vol" min="0" max="100" value="60">
+              <span id="val-music-vol" class="setting-val">60%</span>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-sfx-vol">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.sfxTitle">Громкость эффектов (SFX)</span>
+              <span class="setting-desc" data-i18n="set.sfxDesc">Выстрелы, пращи, взрывы, перемотка времени</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="set-sfx-vol" min="0" max="100" value="85">
+              <span id="val-sfx-vol" class="setting-val">85%</span>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-shake">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.shakeTitle">Тряска камеры</span>
+              <span class="setting-desc" data-i18n="set.shakeDesc">Динамическая отдача при взрывах и попаданиях</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-shake" checked>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-trajectory">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.trajTitle">Предпросмотр грави-дуги</span>
+              <span class="setting-desc" data-i18n="set.trajDesc">Пунктирная линия искривления прицела возле черных дыр</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-trajectory" checked>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-cat-head" data-i18n="set.catTouch">СЕНСОРНОЕ УПРАВЛЕНИЕ</div>
+        <div class="settings-list">
+          <label class="setting-row" for="set-touch-mode">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.touchModeTitle">Сенсорное управление</span>
+              <span class="setting-desc" data-i18n="set.touchModeDesc">Экранные стики и кнопки для телефона и планшета</span>
+            </div>
+            <div class="setting-control">
+              <select id="set-touch-mode" class="setting-select">
+                <option value="auto" selected data-i18n="set.touchAuto">Авто</option>
+                <option value="on" data-i18n="set.touchOn">Всегда вкл</option>
+                <option value="off" data-i18n="set.touchOff">Выкл</option>
+              </select>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-touch-floating">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.touchFloatTitle">Плавающий джойстик</span>
+              <span class="setting-desc" data-i18n="set.touchFloatDesc">Левый стик появляется там, где коснулся палец</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-touch-floating" checked>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-touch-autofire">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.touchAutoFireTitle">Авто-стрельба (сенсор)</span>
+              <span class="setting-desc" data-i18n="set.touchAutoFireDesc">Автоматический огонь по направлению прицела при наличии врагов</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-touch-autofire">
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-touch-canvas-well">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.touchWellTitle">Тап по полю = Дыра</span>
+              <span class="setting-desc" data-i18n="set.touchWellDesc">Нажатие или перетягивание по арене ставит гравитационную дыру</span>
+            </div>
+            <div class="setting-control">
+              <input type="checkbox" id="set-touch-canvas-well" checked>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-touch-scale">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.touchScaleTitle">Размер кнопок (телефон)</span>
+              <span class="setting-desc" data-i18n="set.touchScaleDesc">Масштаб сенсорных кнопок и джойстиков на экране</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="set-touch-scale" min="75" max="150" step="5" value="100">
+              <span id="val-touch-scale" class="setting-val">100%</span>
+            </div>
+          </label>
+
+          <label class="setting-row" for="set-touch-opacity">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.touchOpacityTitle">Прозрачность кнопок (телефон)</span>
+              <span class="setting-desc" data-i18n="set.touchOpacityDesc">Видимость сенсорного управления поверх поля боя</span>
+            </div>
+            <div class="setting-control">
+              <input type="range" id="set-touch-opacity" min="30" max="100" step="5" value="80">
+              <span id="val-touch-opacity" class="setting-val">80%</span>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-cat-head" data-i18n="set.catSystem">ЯЗЫК И СОХРАНЕНИЯ</div>
+        <div class="settings-list">
+          <label class="setting-row" for="set-lang">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.langTitle">Язык интерфейса</span>
+              <span class="setting-desc" data-i18n="set.langDesc">English / Русский / Українська / Español — применяется мгновенно</span>
+            </div>
+            <div class="setting-control">
+              <select id="set-lang" class="setting-select">
+                <option value="en">English</option>
+                <option value="ru" selected>Русский</option>
+                <option value="uk">Українська</option>
+                <option value="es">Español</option>
+              </select>
+            </div>
+          </label>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-title" data-i18n="set.saveTitle">Сквозь-патчевое сохранение</span>
+              <span class="setting-desc" id="save-io-status" data-i18n="set.saveDesc">Прогресс переносится между обновлениями. Экспорт или импорт кода.</span>
+            </div>
+            <div class="setting-control setting-btn-group">
+              <button type="button" id="btn-export-save" class="hud-btn" data-i18n="set.export">Экспорт</button>
+              <button type="button" id="btn-import-save" class="hud-btn" data-i18n="set.import">Импорт</button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <div class="cta-row settings-footer">

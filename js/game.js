@@ -161,6 +161,7 @@ window.SG = window.SG || {};
       this.dungeonWaveIndex = 0;
       this.dungeonWavesTotal = 0;
       this.exitPortal = null;
+      this._preDungeonSnapshot = null;
       this.overworldPos = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5 + 150 };
       this.inBaseZone = false;
       this.waypoint = null;
@@ -822,6 +823,7 @@ window.SG = window.SG || {};
       this.dungeonWaveIndex = 0;
       this.dungeonWavesTotal = 0;
       this.exitPortal = null;
+      this._preDungeonSnapshot = null;
       this.inBaseZone = false;
       this.waypoint = null;
       this._worldMapHover = null;
@@ -1094,6 +1096,10 @@ window.SG = window.SG || {};
       }
     }
 
+    _rollAnomalyRespawnDelay(tier = 1) {
+      return 30 + (tier || 1) * 5 + Math.random() * 15;
+    }
+
     _makeAnomaly(tier, x, y) {
       const cfg = ANOMALY_TIERS[tier] || ANOMALY_TIERS[1];
       const names = (SG.I18n && SG.I18n.anomalyNames(tier)) || cfg.names;
@@ -1110,90 +1116,96 @@ window.SG = window.SG || {};
         y,
         radius: 54 + tier * 3,
         cleared: false,
+        respawnTimer: 0,
         enterProgress: 0
       };
     }
 
-    initOverworldEntities() {
-      this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
-      this.anomalies = [];
+    _findRandomAnomalyPos(opts = {}) {
       const pad = 900;
       const span = WORLD_SIZE - pad * 2;
-      const minBaseDist = 2600;
-      const total = 15;
-      const points = [];
+      const minBaseDist = opts.minBaseDist || 2600;
+      const maxBaseDist = opts.maxBaseDist || Infinity;
+      const minSpacing = opts.minSpacing || 2000;
+      const existing = opts.existingPoints || [];
+      const avoid = opts.avoidPoints || [];
 
-      // Mitchell's best-candidate (blue-noise) sampling across the gigantic 24000x24000 world
-      // outside the 2600px-radius Base building territory so anomalies spread wide into every sector.
-      for (let i = 0; i < total; i++) {
-        let best = null;
-        let bestScore = -1;
-        for (let k = 0; k < 64; k++) {
-          const cx = pad + Math.random() * span;
-          const cy = pad + Math.random() * span;
-          const distBase = Math.hypot(cx - this.base.x, cy - this.base.y);
-          if (distBase < minBaseDist) continue;
-
-          let minD = distBase - minBaseDist + 3200;
-          for (let j = 0; j < points.length; j++) {
-            const d = Math.hypot(cx - points[j].x, cy - points[j].y);
-            if (d < minD) minD = d;
-          }
-          if (minD > bestScore) {
-            bestScore = minD;
-            best = { x: cx, y: cy, distBase };
-          }
-        }
-        if (best) points.push(best);
-      }
-
-      // Assign tiers 1..5 evenly (3 per tier) from nearest to farthest from Base
-      points.sort((a, b) => a.distBase - b.distBase);
-      for (let i = 0; i < points.length; i++) {
-        const tier = Math.min(5, Math.floor(i / 3) + 1);
-        this.anomalies.push(this._makeAnomaly(tier, points[i].x, points[i].y));
-      }
-    }
-
-    spawnNewAnomaly(tier = 1) {
-      const pad = 900;
-      const span = WORLD_SIZE - pad * 2;
-      const minBaseDist = 2600;
-      const bands = {
-        1: [2600, 6200],
-        2: [5200, 9000],
-        3: [7600, 11800],
-        4: [9800, 14000],
-        5: [11500, 16000]
-      };
-      const [bandMin, bandMax] = bands[tier] || bands[1];
-      let bestX = this.base.x + 3200;
-      let bestY = this.base.y;
+      let bestX = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.x + 3200));
+      let bestY = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.y));
       let bestScore = -Infinity;
 
-      for (let attempt = 0; attempt < 48; attempt++) {
-        const cx = pad + Math.random() * span;
-        const cy = pad + Math.random() * span;
-        const distBase = Math.hypot(cx - this.base.x, cy - this.base.y);
-        if (distBase < minBaseDist) continue;
-
-        let nearest = Infinity;
-        for (let j = 0; j < this.anomalies.length; j++) {
-          const d = Math.hypot(cx - this.anomalies[j].x, cy - this.anomalies[j].y);
-          if (d < nearest) nearest = d;
+      for (let attempt = 0; attempt < 72; attempt++) {
+        let cx, cy;
+        if (Number.isFinite(maxBaseDist)) {
+          const ang = Math.random() * Math.PI * 2;
+          const r = minBaseDist + Math.random() * Math.max(100, maxBaseDist - minBaseDist);
+          cx = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.x + Math.cos(ang) * r));
+          cy = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.y + Math.sin(ang) * r));
+        } else {
+          cx = pad + Math.random() * span;
+          cy = pad + Math.random() * span;
         }
-        const bandPenalty = distBase < bandMin
-          ? (bandMin - distBase) * 0.85
-          : (distBase > bandMax ? (distBase - bandMax) * 0.85 : 0);
-        const score = (nearest === Infinity ? 8000 : nearest) - bandPenalty;
+        const distBase = Math.hypot(cx - this.base.x, cy - this.base.y);
+        if (distBase < minBaseDist || distBase > maxBaseDist) continue;
+
+        let ok = true;
+        let minD = Infinity;
+        for (let j = 0; j < existing.length; j++) {
+          const d = Math.hypot(cx - existing[j].x, cy - existing[j].y);
+          if (d < minD) minD = d;
+          if (d < minSpacing) ok = false;
+        }
+        for (let j = 0; j < avoid.length; j++) {
+          const av = avoid[j];
+          const d = Math.hypot(cx - av.x, cy - av.y);
+          if (d < (av.dist || 1200)) ok = false;
+          minD = Math.min(minD, d);
+        }
+        if (ok) return { x: cx, y: cy };
+
+        const score = minD === Infinity ? distBase : minD;
         if (score > bestScore) {
           bestScore = score;
           bestX = cx;
           bestY = cy;
         }
       }
+      return { x: bestX, y: bestY };
+    }
 
-      const anomaly = this._makeAnomaly(tier, bestX, bestY);
+    initOverworldEntities() {
+      this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
+      this.anomalies = [];
+
+      // Always place 1 accessible starter Tier-1 anomaly at a random angle near Base
+      const starterPos = this._findRandomAnomalyPos({
+        minBaseDist: 2800,
+        maxBaseDist: 5800,
+        existingPoints: this.anomalies
+      });
+      this.anomalies.push(this._makeAnomaly(1, starterPos.x, starterPos.y));
+
+      // Shuffle remaining 14 anomaly tiers so every new game scatters tiers randomly across the world
+      const tiers = [1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5];
+      for (let i = tiers.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = tiers[i];
+        tiers[i] = tiers[j];
+        tiers[j] = tmp;
+      }
+      for (let i = 0; i < tiers.length; i++) {
+        const pos = this._findRandomAnomalyPos({ existingPoints: this.anomalies });
+        this.anomalies.push(this._makeAnomaly(tiers[i], pos.x, pos.y));
+      }
+    }
+
+    spawnNewAnomaly(tier = 1, avoidPoints = []) {
+      const active = (this.anomalies || []).filter(a => !a.cleared);
+      const pos = this._findRandomAnomalyPos({
+        existingPoints: active,
+        avoidPoints
+      });
+      const anomaly = this._makeAnomaly(tier, pos.x, pos.y);
       this.anomalies.push(anomaly);
       return anomaly;
     }
@@ -1206,6 +1218,21 @@ window.SG = window.SG || {};
       this.overworldPos = {
         x: Math.max(80, Math.min(WORLD_SIZE - 80, anomaly.x + (dx / d) * 145)),
         y: Math.max(80, Math.min(WORLD_SIZE - 80, anomaly.y + (dy / d) * 145))
+      };
+
+      this._preDungeonSnapshot = {
+        level: this.level,
+        xp: this.xp,
+        xpNext: this.xpNext,
+        score: this.score,
+        rerolls: this.rerolls,
+        wave: this.wave,
+        maxCombo: this.maxCombo,
+        upgradeStacks: { ...this.upgradeStacks },
+        evolvedUpgrades: Array.from(this.evolvedUpgrades || []),
+        hp: this.player.hp,
+        shield: this.player.shield,
+        chrono: this.player.chrono
       };
 
       anomaly.enterProgress = 0;
@@ -1252,7 +1279,10 @@ window.SG = window.SG || {};
       this.anomalyCleared = true;
       const anom = this.activeAnomaly;
       const tier = anom ? anom.tier : 1;
-      if (anom) anom.cleared = true;
+      if (anom) {
+        anom.cleared = true;
+        anom.respawnTimer = this._rollAnomalyRespawnDelay(tier);
+      }
       this.stats.anomaliesCleared = (this.stats.anomaliesCleared || 0) + 1;
 
       // Vacuum remaining dungeon XP & reward player
@@ -1301,6 +1331,7 @@ window.SG = window.SG || {};
       this.dungeonWaveIndex = 0;
       this.dungeonWavesTotal = 0;
       this.exitPortal = null;
+      this._preDungeonSnapshot = null;
 
       this.wells = [];
       this.enemies = [];
@@ -1327,15 +1358,10 @@ window.SG = window.SG || {};
       this.initLandmarks();
       this.snapCameraToPlayer();
 
-      // Replenish anomalies so the open world always stays alive with challenges
-      const uncleared = this.anomalies.filter(a => !a.cleared).length;
-      if (uncleared < 10) {
-        this.anomalies = this.anomalies.filter(a => !a.cleared);
-        const needed = 15 - this.anomalies.length;
-        for (let i = 0; i < needed; i++) {
-          const t = Math.min(5, 1 + ((this.stats.anomaliesCleared + i) % 5));
-          this.spawnNewAnomaly(t);
-        }
+      // Keep total anomaly count at 15 while letting cleared rifts respawn individually on timers
+      while (this.anomalies.length < 15) {
+        const t = 1 + Math.floor(Math.random() * 5);
+        this.spawnNewAnomaly(t);
       }
 
       this.waveBannerTitle = this.t('game.bannerReturnWorld');
@@ -1347,6 +1373,150 @@ window.SG = window.SG || {};
       }
       this.saveProgress('exit_anomaly');
       this.updateHUD();
+    }
+
+    ejectFromAnomalyOnDeath() {
+      this.cancelUpgradeAnim();
+      this.clearInputs();
+      this.closeAllDialogs();
+
+      const snap = this._preDungeonSnapshot;
+      if (this.activeAnomaly) {
+        this.activeAnomaly.enterProgress = 0;
+      }
+
+      this.zone = 'overworld';
+      this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
+      this.activeAnomaly = null;
+      this.anomalyCleared = false;
+      this.dungeonWaveIndex = 0;
+      this.dungeonWavesTotal = 0;
+      this.exitPortal = null;
+      this._preDungeonSnapshot = null;
+
+      this.wells = [];
+      this.enemies = [];
+      this.bullets = [];
+      this.pickups = [];
+      this.waveQueue = [];
+      this.particles.clear();
+
+      const spawnX = Math.max(80, Math.min(WORLD_SIZE - 80, (this.overworldPos && this.overworldPos.x) || this.base.x));
+      const spawnY = Math.max(80, Math.min(WORLD_SIZE - 80, (this.overworldPos && this.overworldPos.y) || (this.base.y + 145)));
+
+      if (snap) {
+        this.level = snap.level;
+        this.xp = snap.xp;
+        this.xpNext = snap.xpNext || this.computeNextXp(this.level);
+        this.score = snap.score;
+        this.rerolls = snap.rerolls;
+        this.wave = snap.wave;
+        this.maxCombo = snap.maxCombo;
+        this.combo = 1.0;
+        this.comboTimer = 0;
+        this.comboTier = 0;
+        this.currentChoices = [];
+
+        this.player = new SG.Player(spawnX, spawnY);
+        this.upgradeStacks = {};
+        this.evolvedUpgrades = new Set();
+        const evoWanted = new Set(snap.evolvedUpgrades || []);
+        for (const [id, rawCount] of Object.entries(snap.upgradeStacks || {})) {
+          const upg = SG.UPGRADES.find(u => u.id === id);
+          if (!upg) continue;
+          const stacks = Math.max(1, Math.min(upg.maxStacks, rawCount));
+          this.upgradeStacks[id] = stacks;
+          for (let s = 0; s < stacks; s++) {
+            upg.apply(this.player.mods, this.player, this);
+          }
+          if (upg.evolution && (evoWanted.has(id) || stacks >= upg.maxStacks)) {
+            this.evolvedUpgrades.add(id);
+            upg.evolution.apply(this.player.mods, this.player, this);
+          }
+        }
+        this.player.rebuildDrones();
+        this.player.hp = Math.max(
+          Math.round(this.player.maxHp * 0.5),
+          Math.min(this.player.maxHp, Math.round(snap.hp || this.player.maxHp))
+        );
+        this.player.shield = this.player.maxShield;
+        this.player.chrono = this.player.maxChrono;
+        this.player.invulnTimer = 2.0;
+      } else if (this.player) {
+        this.player.history = [];
+        this.player.clones = [];
+        this.player.afterimages = [];
+        this.player.x = spawnX;
+        this.player.y = spawnY;
+        this.player.vx = 0;
+        this.player.vy = 0;
+        this.player.hp = Math.max(1, Math.round(this.player.maxHp * 0.5));
+        this.player.shield = this.player.maxShield;
+        this.player.chrono = this.player.maxChrono;
+        this.player.invulnTimer = 2.0;
+      }
+
+      this._buildDirty = true;
+      this.state = 'playing';
+      this.timeScale = 1.0;
+      this.hitstopTimer = 0;
+      this.screenShake = 10;
+      this.damageFlash = 0.85;
+      this.damageFlashColor = 'crimson';
+      this.crosshairBloom = 0;
+
+      this.initLandmarks();
+      this.snapCameraToPlayer();
+
+      this.waveBannerTitle = this.t('game.bannerEjected');
+      this.waveSubtitle = this.t('game.bannerEjectedSub', { lvl: this.level });
+      this.waveBannerColor = '#ff3b6b';
+      this.waveBannerTimer = 3.6;
+      if (this.player) {
+        this.particles.addShockwave(this.player.x, this.player.y, 180, '#ff3b6b', 0.5, 3.2);
+        this.particles.burst(this.player.x, this.player.y, 28, '#ff3b6b', 70, 240, 0.55, true);
+      }
+      this.audio.playRewind();
+      this.saveProgress('anomaly_eject');
+      this.updateHUD();
+    }
+
+    updateAnomalyRespawns(dt) {
+      if (this.gameMode !== 'openworld' || !Array.isArray(this.anomalies) || this.anomalies.length === 0) return;
+      let respawned = false;
+      for (let i = 0; i < this.anomalies.length; i++) {
+        const a = this.anomalies[i];
+        if (!a || !a.cleared) continue;
+        if (!(a.respawnTimer > 0)) {
+          a.respawnTimer = this._rollAnomalyRespawnDelay(a.tier);
+        }
+        a.respawnTimer -= dt;
+        if (a.respawnTimer <= 0) {
+          const avoidPoints = [{ x: a.x, y: a.y, dist: 1600 }];
+          if (this.zone === 'overworld' && this.player) {
+            avoidPoints.push({ x: this.player.x, y: this.player.y, dist: 1000 });
+          }
+          const others = this.anomalies.filter((other, idx) => idx !== i && other && !other.cleared);
+          const pos = this._findRandomAnomalyPos({ existingPoints: others, avoidPoints });
+          const fresh = this._makeAnomaly(a.tier, pos.x, pos.y);
+          this.anomalies[i] = fresh;
+          respawned = true;
+          if (this.zone === 'overworld' && this.player) {
+            this.particles.addShockwave(fresh.x, fresh.y, 150, fresh.color, 0.5, 3);
+            this.particles.addText(
+              this.player.x,
+              this.player.y - 42,
+              this.t('game.anomalyRespawned', { tier: fresh.tier, name: fresh.name }),
+              fresh.color,
+              1.05,
+              2.2
+            );
+          }
+        }
+      }
+      if (respawned && this.zone === 'overworld') {
+        this.saveProgress('anomaly_respawn');
+      }
     }
 
     returnToBase() {
@@ -1425,7 +1595,8 @@ window.SG = window.SG || {};
             name: a.name,
             x: Math.round(a.x * 10) / 10,
             y: Math.round(a.y * 10) / 10,
-            cleared: !!a.cleared
+            cleared: !!a.cleared,
+            respawnTimer: a.cleared ? Math.max(0, Math.round((a.respawnTimer || 0) * 10) / 10) : 0
           })),
           buildings: Array.isArray(this.buildings) ? this.buildings : [],
           resources: (this.resources && typeof this.resources === 'object') ? this.resources : {}
@@ -1493,6 +1664,7 @@ window.SG = window.SG || {};
       this.dungeonWaveIndex = 0;
       this.dungeonWavesTotal = 0;
       this.exitPortal = null;
+      this._preDungeonSnapshot = null;
       this.inBaseZone = false;
       this.waypoint = null;
       this._worldMapHover = null;
@@ -1522,17 +1694,13 @@ window.SG = window.SG || {};
             y: a.y,
             radius: 54 + a.tier * 3,
             cleared: !!a.cleared,
+            respawnTimer: a.cleared ? (a.respawnTimer > 0 ? a.respawnTimer : this._rollAnomalyRespawnDelay(a.tier)) : 0,
             enterProgress: 0
           };
         });
-        const uncleared = this.anomalies.filter(a => !a.cleared).length;
-        if (uncleared < 10) {
-          this.anomalies = this.anomalies.filter(a => !a.cleared);
-          const needed = 15 - this.anomalies.length;
-          for (let i = 0; i < needed; i++) {
-            const t = Math.min(5, 1 + ((saved.stats.anomaliesCleared + i) % 5));
-            this.spawnNewAnomaly(t);
-          }
+        while (this.anomalies.length < 15) {
+          const t = 1 + Math.floor(Math.random() * 5);
+          this.spawnNewAnomaly(t);
         }
       } else {
         this.initOverworldEntities();
@@ -2806,7 +2974,9 @@ window.SG = window.SG || {};
       if (infoEl) {
         if (hoveredAnom) {
           const status = hoveredAnom.cleared
-            ? this.t('wm.statusCleared')
+            ? (hoveredAnom.respawnTimer > 0
+              ? this.t('wm.statusClearedTimer', { s: Math.ceil(hoveredAnom.respawnTimer) })
+              : this.t('wm.statusCleared'))
             : (hoveredAnom.hasBoss ? this.t('wm.statusActiveBoss') : this.t('wm.statusActive'));
           const distM = this.player ? Math.round(Math.hypot(hoveredAnom.x - this.player.x, hoveredAnom.y - this.player.y) / 10) : 0;
           infoEl.textContent = this.t('wm.infoAnom', { tier: hoveredAnom.tier, name: hoveredAnom.name, status, waves: hoveredAnom.wavesTotal, dist: distM });
@@ -4365,6 +4535,7 @@ window.SG = window.SG || {};
       }
 
       if (this.waveBannerTimer > 0) this.waveBannerTimer -= dt;
+      this.updateAnomalyRespawns(dt);
 
       if (this.zone === 'overworld') {
         // Peaceful Overworld: Base repair dock & Anomaly Dungeon entry portals
@@ -5205,6 +5376,10 @@ window.SG = window.SG || {};
       this.particles.update(dt, this.wells);
 
       if (this.player.hp <= 0) {
+        if (this.zone === 'anomaly' && this.gameMode === 'openworld') {
+          this.ejectFromAnomalyOnDeath();
+          return;
+        }
         this.triggerGameOver();
       }
 

@@ -1033,7 +1033,10 @@ window.SG = window.SG || {};
         ctx.textAlign = 'center';
         ctx.font = '700 10px "JetBrains Mono", monospace';
         ctx.fillStyle = 'rgba(34, 255, 166, 0.72)';
-        ctx.fillText(tr('sprite.anomCleared', null, 'СТАБИЛИЗИРОВАНА'), x, y + radius * 0.72 + 16);
+        const clearedLabel = anomaly.respawnTimer > 0
+          ? tr('sprite.anomClearedTimer', { s: Math.ceil(anomaly.respawnTimer) }, `СТАБИЛИЗИРОВАНА • ${Math.ceil(anomaly.respawnTimer)}с`)
+          : tr('sprite.anomCleared', null, 'СТАБИЛИЗИРОВАНА');
+        ctx.fillText(clearedLabel, x, y + radius * 0.72 + 16);
         ctx.restore();
         return;
       }
