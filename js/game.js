@@ -2164,6 +2164,9 @@ window.SG = window.SG || {};
       const worldmapDlg = document.getElementById('worldmap-dialog');
       if (worldmapDlg) worldmapDlg.addEventListener('close', handleSubDialogClose);
 
+      const buildDlg = document.getElementById('build-dialog');
+      if (buildDlg) buildDlg.addEventListener('close', handleSubDialogClose);
+
       const pauseDlg = document.getElementById('pause-dialog');
       if (pauseDlg) {
         pauseDlg.addEventListener('close', () => {
@@ -2335,8 +2338,8 @@ window.SG = window.SG || {};
       const closeBuildBtn = document.getElementById('btn-close-build');
       if (closeBuildBtn) {
         closeBuildBtn.addEventListener('click', () => {
-          this.closeDialogSilently(document.getElementById('build-dialog'));
-          this.resumeFromSubDialog();
+          const dlg = document.getElementById('build-dialog');
+          if (dlg && dlg.open) dlg.close();
         });
       }
       const cancelPlaceBtn = document.getElementById('btn-cancel-placement');
@@ -2934,8 +2937,10 @@ window.SG = window.SG || {};
       if (matter < cost) return;
 
       this.closeDialogSilently(document.getElementById('build-dialog'));
-      this.resumeFromSubDialog();
+      this._subModalOrigin = null;
+      this.state = 'playing';
       this.buildPlacement = { typeId, def, cost };
+      this.updateHUD();
       const banner = document.getElementById('build-placement-banner');
       const txt = document.getElementById('build-placement-text');
       if (txt) txt.textContent = `Строительство: ${def.name} (${cost} ⚡) • ЛКМ рядом с базой • ПКМ / Esc — отмена`;
