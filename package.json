@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "prepare-dist": "node scripts/build-dist.mjs",
+    "build": "node scripts/build-dist.mjs",
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"
