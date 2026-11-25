@@ -537,7 +537,7 @@ window.SG = window.SG || {};
       const staticBoost = (this.mods.staticBarrier > 0 && this.shield >= this.maxShield * 0.95)
         ? 1 + 0.08 * this.mods.staticBarrier
         : 1;
-      const baseAccel = 1950 * this.mods.moveSpeedMult * berserkMove * staticBoost;
+      const baseAccel = 1950 * this.mods.moveSpeedMult * berserkMove * staticBoost * (input.speedMult || 1);
       this.vx += mx * baseAccel * dt;
       this.vy += my * baseAccel * dt;
 

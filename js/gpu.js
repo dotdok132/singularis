@@ -14,7 +14,11 @@ window.SG = window.SG || {};
   `;
 
   const NEBULA_FS = `
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+    precision highp float;
+    #else
     precision mediump float;
+    #endif
     varying vec2 vUv;
     uniform vec2 uRes;
     uniform vec2 uCam;
@@ -44,7 +48,7 @@ window.SG = window.SG || {};
 
       if (uDeck > 0.5) {
         vec2 screenPx = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
-        vec2 worldP = screenPx + uCam;
+        vec2 worldP = screenPx + mod(uCam, 256.0);
         vec2 tile = mod(worldP, 64.0);
         vec2 sec = mod(worldP, 256.0);
         float plate = mod(floor(worldP.x / 64.0) + floor(worldP.y / 64.0), 2.0);

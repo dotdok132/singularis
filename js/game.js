@@ -4,9 +4,9 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.0.0';
+  SG.VERSION = 'v2.0.1';
 
-  const WORLD_SIZE = 3200;
+  const WORLD_SIZE = 9600;
   const DUNGEON_SIZE = 2200;
 
   const ANOMALY_TIERS = {
@@ -964,12 +964,13 @@ window.SG = window.SG || {};
 
     initLandmarks() {
       this.landmarks = [];
-      const cols = 4;
-      const rows = 4;
-      const pad = 420;
+      const isHugeWorld = this.bounds.width >= 6000;
+      const cols = isHugeWorld ? 10 : 4;
+      const rows = isHugeWorld ? 10 : 4;
+      const pad = isHugeWorld ? 500 : 420;
       const stepX = (this.bounds.width - pad * 2) / (cols - 1);
       const stepY = (this.bounds.height - pad * 2) / (rows - 1);
-      const colNames = ['A', 'B', 'C', 'D'];
+      const colNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           this.landmarks.push({
@@ -997,7 +998,7 @@ window.SG = window.SG || {};
     initOverworldEntities() {
       this.base = { x: WORLD_SIZE * 0.5, y: WORLD_SIZE * 0.5, radius: 64, repairRadius: 210 };
       this.anomalies = [];
-      const tiers = [1, 1, 2, 2, 3, 4, 5];
+      const tiers = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5];
       for (let i = 0; i < tiers.length; i++) {
         this.spawnNewAnomaly(tiers[i], i, tiers.length);
       }
@@ -1005,20 +1006,27 @@ window.SG = window.SG || {};
 
     spawnNewAnomaly(tier = 1, slotIdx = null, slotCount = null) {
       const cfg = ANOMALY_TIERS[tier] || ANOMALY_TIERS[1];
-      const pad = 230;
-      const minD = tier === 1 ? 560 : (tier === 2 ? 820 : 1040);
-      const maxD = tier === 1 ? 820 : (tier === 2 ? 1100 : 1420);
-      let ax = this.base.x + 650;
+      const pad = 280;
+      const rings = {
+        1: [700, 1550],
+        2: [1550, 2550],
+        3: [2450, 3450],
+        4: [3300, 4150],
+        5: [3900, 4480]
+      };
+      const [minD, maxD] = rings[tier] || rings[1];
+      let ax = this.base.x + 850;
       let ay = this.base.y;
-      for (let attempt = 0; attempt < 36; attempt++) {
+      for (let attempt = 0; attempt < 48; attempt++) {
         const baseAng = slotIdx !== null && slotCount
-          ? (slotIdx / slotCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.65
+          ? (slotIdx / slotCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5
           : Math.random() * Math.PI * 2;
         const dist = minD + Math.random() * (maxD - minD);
         const cx = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.x + Math.cos(baseAng) * dist));
         const cy = Math.max(pad, Math.min(WORLD_SIZE - pad, this.base.y + Math.sin(baseAng) * dist));
-        const tooCloseToBase = Math.hypot(cx - this.base.x, cy - this.base.y) < 460;
-        const tooCloseToOther = this.anomalies.some(other => Math.hypot(cx - other.x, cy - other.y) < 420);
+        const minSep = attempt < 24 ? 680 : 460;
+        const tooCloseToBase = Math.hypot(cx - this.base.x, cy - this.base.y) < 580;
+        const tooCloseToOther = this.anomalies.some(other => Math.hypot(cx - other.x, cy - other.y) < minSep);
         if (!tooCloseToBase && !tooCloseToOther) {
           ax = cx;
           ay = cy;
@@ -1173,9 +1181,9 @@ window.SG = window.SG || {};
 
       // Replenish anomalies so the open world always stays alive with challenges
       const uncleared = this.anomalies.filter(a => !a.cleared).length;
-      if (uncleared < 5) {
+      if (uncleared < 12) {
         this.anomalies = this.anomalies.filter(a => !a.cleared);
-        const needed = 7 - this.anomalies.length;
+        const needed = 18 - this.anomalies.length;
         for (let i = 0; i < needed; i++) {
           const t = Math.min(5, 1 + ((this.stats.anomaliesCleared + i) % 5));
           this.spawnNewAnomaly(t);
@@ -3062,7 +3070,8 @@ window.SG = window.SG || {};
         aimX,
         aimY,
         firing,
-        bulletTime: !!this.keys['Space'] || this.touchInput.bulletTime
+        bulletTime: !!this.keys['Space'] || this.touchInput.bulletTime,
+        speedMult: this.zone === 'overworld' ? 1.55 : 1.0
       };
 
       // Player updates in personal proper-time (stays fast during Bullet-Time!)
@@ -5179,11 +5188,15 @@ window.SG = window.SG || {};
 
     renderMinimap(ctx, vpW, vpH) {
       if (!this.player || vpW < 360 || vpH < 260) return;
-      const size = this.isTouchDevice || vpW < 760 ? 94 : 124;
+      const isOverworld = this.zone === 'overworld';
+      const size = isOverworld
+        ? (this.isTouchDevice || vpW < 760 ? 108 : 148)
+        : (this.isTouchDevice || vpW < 760 ? 94 : 124);
       const mx = vpW - size - 14;
       const my = this.isTouchDevice ? 112 : 76;
       const scaleX = size / this.bounds.width;
       const scaleY = size / this.bounds.height;
+      const gridDivs = isOverworld ? 8 : 4;
 
       ctx.save();
       ctx.fillStyle = 'rgba(7, 11, 19, 0.78)';
@@ -5192,13 +5205,13 @@ window.SG = window.SG || {};
       ctx.fillRect(mx, my, size, size);
       ctx.strokeRect(mx, my, size, size);
 
-      // Sector sub-grid (4x4 quarters)
+      // Sector sub-grid
       ctx.strokeStyle = 'rgba(130, 155, 190, 0.14)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let q = 1; q < 4; q++) {
-        const gx = mx + (size * q) / 4;
-        const gy = my + (size * q) / 4;
+      for (let q = 1; q < gridDivs; q++) {
+        const gx = mx + (size * q) / gridDivs;
+        const gy = my + (size * q) / gridDivs;
         ctx.moveTo(gx, my);
         ctx.lineTo(gx, my + size);
         ctx.moveTo(mx, gy);
@@ -5206,8 +5219,8 @@ window.SG = window.SG || {};
       }
       ctx.stroke();
 
-      // Industrial landmarks
-      if (this.landmarks) {
+      // Industrial landmarks (shown in dungeons; omitted in giant overworld to keep Base & Anomalies crystal clear)
+      if (!isOverworld && this.landmarks) {
         ctx.fillStyle = 'rgba(120, 145, 180, 0.35)';
         for (let i = 0; i < this.landmarks.length; i++) {
           const lm = this.landmarks[i];
@@ -5293,8 +5306,8 @@ window.SG = window.SG || {};
       // Current viewport frame
       const vx = mx + this.camera.x * scaleX;
       const vy = my + this.camera.y * scaleY;
-      const vw = Math.min(size, vpW * scaleX);
-      const vh = Math.min(size, vpH * scaleY);
+      const vw = Math.min(size, Math.max(8, vpW * scaleX));
+      const vh = Math.min(size, Math.max(6, vpH * scaleY));
       ctx.strokeStyle = 'rgba(0, 240, 255, 0.55)';
       ctx.lineWidth = 1;
       ctx.strokeRect(vx, vy, vw, vh);
@@ -5311,8 +5324,8 @@ window.SG = window.SG || {};
       ctx.stroke();
 
       // Radar coordinate label
-      const col = Math.min(4, Math.max(1, Math.floor((this.player.x / this.bounds.width) * 4) + 1));
-      const row = Math.min(4, Math.max(1, Math.floor((this.player.y / this.bounds.height) * 4) + 1));
+      const col = Math.min(gridDivs, Math.max(1, Math.floor((this.player.x / this.bounds.width) * gridDivs) + 1));
+      const row = Math.min(gridDivs, Math.max(1, Math.floor((this.player.y / this.bounds.height) * gridDivs) + 1));
       ctx.fillStyle = this.zone === 'anomaly' && this.activeAnomaly ? this.activeAnomaly.color : 'rgba(180, 200, 224, 0.78)';
       ctx.font = '700 9px "JetBrains Mono", system-ui, sans-serif';
       ctx.textAlign = 'right';
