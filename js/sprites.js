@@ -4,6 +4,8 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
+  const tr = (k, v, fb) => (SG.I18n ? SG.I18n.t(k, v) : fb);
+
   const Sprites = {
     ready: false,
     units: {},
@@ -999,11 +1001,11 @@ window.SG = window.SG || {};
       ctx.textAlign = 'center';
       ctx.font = '800 11px "JetBrains Mono", monospace';
       ctx.fillStyle = '#7df9ff';
-      ctx.fillText('БАЗА // КОМАНДНОЕ ЯДРО', base.x, base.y - 88);
+      ctx.fillText(tr('sprite.baseTitle', null, 'БАЗА // КОМАНДНОЕ ЯДРО'), base.x, base.y - 88);
       if (playerInRange) {
         ctx.font = '700 10px "JetBrains Mono", monospace';
         ctx.fillStyle = '#22ffa6';
-        ctx.fillText('ДОК-РЕМОНТ АКТИВЕН', base.x, base.y + 98);
+        ctx.fillText(tr('sprite.baseRepair', null, 'ДОК-РЕМОНТ АКТИВЕН'), base.x, base.y + 98);
       }
 
       ctx.restore();
@@ -1031,7 +1033,7 @@ window.SG = window.SG || {};
         ctx.textAlign = 'center';
         ctx.font = '700 10px "JetBrains Mono", monospace';
         ctx.fillStyle = 'rgba(34, 255, 166, 0.72)';
-        ctx.fillText('СТАБИЛИЗИРОВАНА', x, y + radius * 0.72 + 16);
+        ctx.fillText(tr('sprite.anomCleared', null, 'СТАБИЛИЗИРОВАНА'), x, y + radius * 0.72 + 16);
         ctx.restore();
         return;
       }
@@ -1102,7 +1104,7 @@ window.SG = window.SG || {};
         ctx.textAlign = 'center';
         ctx.font = '800 12px "JetBrains Mono", monospace';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`ВХОД ${Math.round(prog * 100)}%`, x, y + 4);
+        ctx.fillText(tr('sprite.anomEnter', { pct: Math.round(prog * 100) }, `ВХОД ${Math.round(prog * 100)}%`), x, y + 4);
       }
 
       // Labels
@@ -1113,7 +1115,8 @@ window.SG = window.SG || {};
       if (isNear) {
         ctx.font = '700 10px "JetBrains Mono", monospace';
         ctx.fillStyle = '#e2f6ff';
-        ctx.fillText(`${wavesTotal} ВОЛН${hasBoss ? ' • БОСС' : ''} • ЗАЛЕТИТЕ В РАЗЛОМ`, x, y + radius + 24);
+        const bossTxt = hasBoss ? tr('sprite.anomBossTag', null, ' • БОСС') : '';
+        ctx.fillText(tr('sprite.anomInfo', { waves: wavesTotal, boss: bossTxt }, `${wavesTotal} ВОЛН${bossTxt} • ЗАЛЕТИТЕ В РАЗЛОМ`), x, y + radius + 24);
       }
 
       ctx.restore();
@@ -1172,10 +1175,10 @@ window.SG = window.SG || {};
       ctx.textAlign = 'center';
       ctx.font = '800 11px "JetBrains Mono", monospace';
       ctx.fillStyle = '#22ffa6';
-      ctx.fillText('ПОРТАЛ ВЫХОДА [T]', x, y - radius - 14);
+      ctx.fillText(tr('sprite.exitTitle', null, 'ПОРТАЛ ВЫХОДА [T]'), x, y - radius - 14);
       ctx.font = '700 10px "JetBrains Mono", monospace';
       ctx.fillStyle = '#d8ecff';
-      ctx.fillText('ВОЗВРАТ В МИР', x, y + radius + 20);
+      ctx.fillText(tr('sprite.exitSub', null, 'ВОЗВРАТ В МИР'), x, y + radius + 20);
 
       ctx.restore();
     }

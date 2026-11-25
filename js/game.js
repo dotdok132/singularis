@@ -4,7 +4,7 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.3.0';
+  SG.VERSION = 'v2.4.0';
 
   const WORLD_SIZE = 24000;
   const DUNGEON_SIZE = 2200;
@@ -258,9 +258,14 @@ window.SG = window.SG || {};
       };
 
       this.applySettings();
+      if (SG.I18n) {
+        SG.I18n.setLang(this.settings.lang);
+        SG.I18n.applyDOM();
+      }
+      this.updateLangUI();
       this.bindEvents();
       if (this.hudEls.versionBadge) this.hudEls.versionBadge.textContent = `SINGULARIS ${SG.VERSION}`;
-      if (this.hudEls.titleVersion) this.hudEls.titleVersion.textContent = `Версия ${SG.VERSION}`;
+      if (this.hudEls.titleVersion) this.hudEls.titleVersion.textContent = this.t('title.version', { ver: SG.VERSION });
       this.resetRun(false);
 
       this.lastTime = performance.now();
@@ -273,6 +278,7 @@ window.SG = window.SG || {};
 
     loadSettings() {
       const defaults = {
+        lang: 'ru',
         difficulty: 'normal',
         quality: 'medium',
         gpuAccel: true,
@@ -294,6 +300,7 @@ window.SG = window.SG || {};
         if (!raw) return defaults;
         const parsed = JSON.parse(raw);
         const merged = { ...defaults, ...parsed };
+        if (!['ru', 'uk', 'en', 'es'].includes(merged.lang)) merged.lang = 'ru';
         if (!DIFFICULTIES[merged.difficulty]) merged.difficulty = 'normal';
         if (!QUALITY_PRESETS[merged.quality]) merged.quality = 'medium';
         if (!['auto', 'on', 'off'].includes(merged.touchMode)) merged.touchMode = 'auto';
@@ -328,6 +335,9 @@ window.SG = window.SG || {};
     }
 
     applySettings() {
+      if (SG.I18n && this.settings && this.settings.lang) {
+        SG.I18n.setLang(this.settings.lang);
+      }
       this.syncTouchMode();
       this.audio.setMusicVolume((this.settings.musicVol || 0) / 100);
       this.audio.setSfxVolume((this.settings.sfxVol || 0) / 100);
@@ -359,6 +369,11 @@ window.SG = window.SG || {};
       this.updateQualityUI();
       if (this.hudEls && this.hudEls.fpsBadge) {
         this.hudEls.fpsBadge.hidden = !this.settings.showFps || this.state === 'title';
+      }
+      const sysEl = document.getElementById('title-sys-status');
+      if (sysEl) {
+        const backend = (this.gpu && this.gpu.isActive()) ? this.gpu.backend : '2D CANVAS';
+        sysEl.textContent = `● ${backend} • ${preset.label}`;
       }
     }
 
@@ -873,8 +888,8 @@ window.SG = window.SG || {};
         if (this.gameMode === 'endless') {
           this.startWave(1);
         } else {
-          this.waveBannerTitle = 'ОТКРЫТЫЙ МИР // БАЗА';
-          this.waveSubtitle = 'ЗАЛЕТИТЕ В ЛЮБУЮ АНОМАЛИЮ ДЛЯ ЗАЧИСТКИ';
+          this.waveBannerTitle = this.t('game.bannerOverworld');
+          this.waveSubtitle = this.t('game.bannerOverworldSub');
           this.waveBannerColor = '#00f0ff';
           this.waveBannerTimer = 3.2;
           this.saveProgress('new_run');
@@ -921,6 +936,54 @@ window.SG = window.SG || {};
       });
     }
 
+    t(key, vars) {
+      return SG.I18n ? SG.I18n.t(key, vars) : key;
+    }
+
+    locale() {
+      return SG.I18n ? SG.I18n.locale() : 'ru-RU';
+    }
+
+    updateLangUI() {
+      const lang = (this.settings && this.settings.lang) || 'ru';
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        const active = btn.dataset && btn.dataset.lang === lang;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      const langSel = document.getElementById('set-lang');
+      if (langSel) langSel.value = lang;
+    }
+
+    setLanguage(lang) {
+      const next = ['ru', 'uk', 'en', 'es'].includes(lang) ? lang : 'ru';
+      this.settings.lang = next;
+      this.saveSettings();
+      if (SG.I18n) {
+        SG.I18n.setLang(next);
+        SG.I18n.applyDOM();
+      }
+      this.updateLangUI();
+      if (this.hudEls && this.hudEls.titleVersion) {
+        this.hudEls.titleVersion.textContent = this.t('title.version', { ver: SG.VERSION });
+      }
+      const modTitleBtn = document.getElementById('btn-open-modules-title');
+      if (modTitleBtn && SG.UPGRADES) {
+        modTitleBtn.textContent = this.t('title.catalog', { n: SG.UPGRADES.length });
+      }
+      this.updateTitleBest();
+      this.syncSettingsUI();
+      this.updateHUD();
+      const pauseDlg = document.getElementById('pause-dialog');
+      if (pauseDlg && pauseDlg.open) this.renderPauseSummary();
+      const modDlg = document.getElementById('modules-dialog');
+      if (modDlg && modDlg.open) this.renderModulesCatalog();
+      const wmDlg = document.getElementById('worldmap-dialog');
+      if (wmDlg && wmDlg.open) this.renderWorldMap();
+      const upgDlg = document.getElementById('upgrade-dialog');
+      if (upgDlg && upgDlg.open) this.renderUpgradeChoices();
+    }
+
     updateDifficultyUI() {
       document.querySelectorAll('.diff-btn').forEach(btn => {
         const active = btn.dataset.diff === this.settings.difficulty;
@@ -940,12 +1003,13 @@ window.SG = window.SG || {};
       const lbl = document.getElementById('gpu-backend-label');
       if (lbl) {
         lbl.textContent = this.gpu && this.gpu.supported
-          ? `${this.gpu.backend} доступен`
-          : 'WebGL недоступен — 2D-резерв';
+          ? this.t('set.gpuAvail', { backend: this.gpu.backend })
+          : this.t('set.gpuFallback');
       }
     }
 
     syncSettingsUI() {
+      this.updateLangUI();
       const qSel = document.getElementById('set-quality');
       const gpuCb = document.getElementById('set-gpu');
       const texCb = document.getElementById('set-textures');
@@ -1032,7 +1096,8 @@ window.SG = window.SG || {};
 
     _makeAnomaly(tier, x, y) {
       const cfg = ANOMALY_TIERS[tier] || ANOMALY_TIERS[1];
-      const name = cfg.names[Math.floor(Math.random() * cfg.names.length)];
+      const names = (SG.I18n && SG.I18n.anomalyNames(tier)) || cfg.names;
+      const name = names[Math.floor(Math.random() * names.length)];
       return {
         id: 'anom_' + Math.random().toString(36).slice(2, 9),
         tier,
@@ -1172,8 +1237,8 @@ window.SG = window.SG || {};
       this.dungeonWaveIndex = 1;
       this.dungeonWavesTotal = anomaly.wavesTotal;
       this.startWave(anomaly.startWave);
-      this.waveBannerTitle = `АНОМАЛИЯ: ${anomaly.name}`;
-      this.waveSubtitle = `УРОВЕНЬ ${anomaly.tier} • ВОЛНА 1/${anomaly.wavesTotal}`;
+      this.waveBannerTitle = this.t('game.bannerAnomaly', { name: anomaly.name });
+      this.waveSubtitle = this.t('game.bannerAnomalySub', { tier: anomaly.tier, total: anomaly.wavesTotal });
       this.waveBannerColor = anomaly.color;
       this.waveBannerTimer = 3.0;
       this.particles.addShockwave(this.player.x, this.player.y, 170, anomaly.color, 0.45, 3);
@@ -1214,13 +1279,13 @@ window.SG = window.SG || {};
         graceTimer: 0.65
       };
 
-      this.waveBannerTitle = 'АНОМАЛИЯ ЗАЧИЩЕНА!';
-      this.waveSubtitle = 'ЗАЛЕТИТЕ В ПОРТАЛ ИЛИ НАЖМИТЕ [T] ДЛЯ ВОЗВРАТА';
+      this.waveBannerTitle = this.t('game.bannerAnomalyCleared');
+      this.waveSubtitle = this.t('game.bannerAnomalyClearedSub');
       this.waveBannerColor = '#22ffa6';
       this.waveBannerTimer = 3.6;
 
       this.particles.addShockwave(px, py, 140, '#22ffa6', 0.5, 3);
-      this.particles.addText(this.player.x, this.player.y - 36, `+${scoreBonus} ОЧКОВ • +${xpBonus} XP`, '#22ffa6', 1.28, 1.8);
+      this.particles.addText(this.player.x, this.player.y - 36, `+${scoreBonus} • +${xpBonus} XP`, '#22ffa6', 1.28, 1.8);
       this.audio.playLevelUp();
       this.gainXP(xpBonus);
       this.totalAnomaliesCleared = (this.totalAnomaliesCleared || 0) + 1;
@@ -1273,8 +1338,8 @@ window.SG = window.SG || {};
         }
       }
 
-      this.waveBannerTitle = 'ОТКРЫТЫЙ МИР';
-      this.waveSubtitle = 'БАЗА АКТИВНА • ВЫБЕРИТЕ СЛЕДУЮЩУЮ АНОМАЛИЮ';
+      this.waveBannerTitle = this.t('game.bannerReturnWorld');
+      this.waveSubtitle = this.t('game.bannerReturnWorldSub');
       this.waveBannerColor = '#00f0ff';
       this.waveBannerTimer = 2.8;
       if (this.player) {
@@ -1291,7 +1356,7 @@ window.SG = window.SG || {};
         if (this.anomalyCleared) {
           this.exitAnomalyToOverworld(true);
         } else {
-          this.particles.addText(this.player.x, this.player.y - 30, 'ЗАЧИСТИТЕ АНОМАЛИЮ ПЕРЕД ВЫХОДОМ!', '#ff6b8b', 1.05, 1.3);
+          this.particles.addText(this.player.x, this.player.y - 30, this.t('game.clearAnomalyFirst'), '#ff6b8b', 1.05, 1.3);
         }
         return;
       }
@@ -1302,7 +1367,7 @@ window.SG = window.SG || {};
       this.player.vy = 0;
       this.snapCameraToPlayer();
       this.particles.addShockwave(this.player.x, this.player.y, 120, '#22ffa6', 0.4, 2.5);
-      this.particles.addText(this.player.x, this.player.y - 28, 'ВОЗВРАТ НА БАЗУ', '#22ffa6', 1.15, 1.3);
+      this.particles.addText(this.player.x, this.player.y - 28, this.t('game.returnedBase'), '#22ffa6', 1.15, 1.3);
       this.audio.playRewind();
       this.saveProgress('return_base');
       this.updateHUD();
@@ -1542,16 +1607,16 @@ window.SG = window.SG || {};
       this.closeAllDialogs();
 
       const migratedPatch = saved.gameVersion && saved.gameVersion !== SG.VERSION;
-      this.waveBannerTitle = migratedPatch ? 'ПРОГРЕСС ПЕРЕНЕСЁН' : 'ПРОГРЕСС ЗАГРУЖЕН';
+      this.waveBannerTitle = migratedPatch ? this.t('game.saveMigratedTitle') : this.t('game.saveLoadedTitle');
       this.waveSubtitle = migratedPatch
-        ? `${saved.gameVersion} → ${SG.VERSION} • СОХРАНЕНИЕ АДАПТИРОВАНО`
-        : `УР. ${this.level} • АНОМАЛИЙ: ${this.stats.anomaliesCleared}`;
+        ? this.t('game.saveMigratedSub', { from: saved.gameVersion, to: SG.VERSION })
+        : this.t('game.saveLoadedSub', { lvl: this.level, cleared: this.stats.anomaliesCleared });
       this.waveBannerColor = migratedPatch ? '#22ffa6' : '#00f0ff';
       this.waveBannerTimer = 3.2;
 
       this.particles.addShockwave(this.player.x, this.player.y, 160, this.waveBannerColor, 0.45, 3);
       if (retiredCount > 0) {
-        this.particles.addText(this.player.x, this.player.y - 34, `КОМПЕНСАЦИЯ: +${retiredCount} ПЕРЕБРОС`, '#ffd166', 1.15, 2.0);
+        this.particles.addText(this.player.x, this.player.y - 34, this.t('game.compensation', { n: retiredCount }), '#ffd166', 1.15, 2.0);
       }
 
       this.saveProgress('loaded');
@@ -1570,16 +1635,20 @@ window.SG = window.SG || {};
         const modsCnt = Object.keys(saved.build.upgradeStacks || {}).length;
         if (contBtn) {
           contBtn.hidden = false;
-          contBtn.textContent = `ПРОДОЛЖИТЬ (УР. ${saved.run.level} • АНОМАЛИЙ: ${saved.stats.anomaliesCleared})`;
+          contBtn.textContent = this.t('title.continueBtn', { lvl: saved.run.level, cleared: saved.stats.anomaliesCleared });
         }
         if (metaEl) {
           metaEl.hidden = false;
-          metaEl.textContent = `Сохранение ${saved.gameVersion} • Модулей: ${modsCnt} • Очки: ${saved.run.score.toLocaleString('ru-RU')}`;
+          metaEl.textContent = this.t('title.saveMeta', {
+            ver: saved.gameVersion,
+            mods: modsCnt,
+            score: saved.run.score.toLocaleString(this.locale())
+          });
         }
         if (startBtn) {
           startBtn.classList.remove('btn-primary');
           startBtn.classList.add('btn-secondary');
-          startBtn.textContent = 'НОВАЯ ИГРА';
+          startBtn.textContent = this.t('title.newGame');
         }
       } else {
         if (contBtn) contBtn.hidden = true;
@@ -1587,14 +1656,14 @@ window.SG = window.SG || {};
         if (startBtn) {
           startBtn.classList.remove('btn-secondary');
           startBtn.classList.add('btn-primary');
-          startBtn.textContent = 'ОТКРЫТЫЙ МИР';
+          startBtn.textContent = this.t('title.openWorld');
         }
       }
       const endlessBtn = document.getElementById('btn-start-endless');
       if (endlessBtn) {
         endlessBtn.textContent = this.bestEndlessWave > 0
-          ? `∞ МАХАЧ (РЕКОРД: В.${this.bestEndlessWave.toLocaleString('ru-RU')})`
-          : '∞ БЕСКОНЕЧНЫЙ МАХАЧ';
+          ? this.t('title.endlessBest', { wave: this.bestEndlessWave.toLocaleString(this.locale()) })
+          : this.t('title.endless');
       }
     }
 
@@ -1700,7 +1769,7 @@ window.SG = window.SG || {};
           this.particles.addText(
             this.player.x,
             this.player.y - 26,
-            this.repulsorMode ? 'РЕЖИМ: БЕЛАЯ ДЫРА (ОТТАЛКИВАНИЕ)' : 'РЕЖИМ: ЧЕРНАЯ ДЫРА (ПРИТЯЖЕНИЕ)',
+            this.repulsorMode ? this.t('game.modeWhite') : this.t('game.modeBlack'),
             this.repulsorMode ? '#ffb838' : '#c06cff',
             1.02
           );
@@ -1832,7 +1901,13 @@ window.SG = window.SG || {};
         });
       }
 
-      // Difficulty & Quality selector buttons
+      // Language, Difficulty & Quality selector buttons
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.setLanguage(btn.dataset.lang);
+        });
+      });
+
       document.querySelectorAll('.diff-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const diff = btn.dataset.diff;
@@ -2018,6 +2093,13 @@ window.SG = window.SG || {};
       });
 
       // Settings Controls
+      const langSel = document.getElementById('set-lang');
+      if (langSel) {
+        langSel.addEventListener('change', () => {
+          this.setLanguage(langSel.value);
+        });
+      }
+
       const qSel = document.getElementById('set-quality');
       if (qSel) {
         qSel.addEventListener('change', () => {
@@ -2157,17 +2239,17 @@ window.SG = window.SG || {};
         resetRecBtn.addEventListener('click', () => {
           if (resetRecBtn.dataset.armed !== '1') {
             resetRecBtn.dataset.armed = '1';
-            resetRecBtn.textContent = 'Точно сбросить?';
+            resetRecBtn.textContent = this.t('set.resetConfirm');
             clearTimeout(this._resetConfirmTimer);
             this._resetConfirmTimer = setTimeout(() => {
               resetRecBtn.dataset.armed = '0';
-              resetRecBtn.textContent = 'Сбросить рекорды';
+              resetRecBtn.textContent = this.t('set.resetRecords');
             }, 3000);
             return;
           }
           clearTimeout(this._resetConfirmTimer);
           resetRecBtn.dataset.armed = '0';
-          resetRecBtn.textContent = 'Рекорды сброшены';
+          resetRecBtn.textContent = this.t('set.resetDone');
           this.bestScore = 0;
           this.bestWave = 1;
           this.totalKills = 0;
@@ -2192,7 +2274,7 @@ window.SG = window.SG || {};
             ? this.buildSaveSnapshot()
             : SG.Save.peek(WORLD_SIZE);
           if (!snap) {
-            if (saveIoStatus) saveIoStatus.textContent = 'Нет активного сохранения для экспорта.';
+            if (saveIoStatus) saveIoStatus.textContent = this.t('set.saveNoActive');
             return;
           }
           const code = SG.Save.exportCode(snap);
@@ -2200,23 +2282,23 @@ window.SG = window.SG || {};
             navigator.clipboard.writeText(code).catch(() => {});
           }
           if (typeof window.prompt === 'function') {
-            window.prompt('Код сохранения (скопируйте в буфер):', code);
+            window.prompt(this.t('set.savePromptExport'), code);
           }
-          if (saveIoStatus) saveIoStatus.textContent = `Код сохранения экспортирован (${snap.gameVersion}).`;
+          if (saveIoStatus) saveIoStatus.textContent = this.t('set.saveExported', { ver: snap.gameVersion });
         });
       }
       if (importSaveBtn && SG.Save) {
         importSaveBtn.addEventListener('click', () => {
-          const raw = typeof window.prompt === 'function' ? window.prompt('Вставьте код сквозь-патчевого сохранения (SG2:...):') : '';
+          const raw = typeof window.prompt === 'function' ? window.prompt(this.t('set.savePromptImport')) : '';
           if (!raw) return;
           const imported = SG.Save.importCode(raw, WORLD_SIZE);
           if (!imported) {
-            if (saveIoStatus) saveIoStatus.textContent = 'Ошибка: повреждённый или неверный код сохранения.';
+            if (saveIoStatus) saveIoStatus.textContent = this.t('set.saveImportErr');
             return;
           }
           SG.Save.write(imported);
           this.updateTitleSaveUI();
-          if (saveIoStatus) saveIoStatus.textContent = `Импортировано (${imported.gameVersion} → ${SG.VERSION}). Загрузка...`;
+          if (saveIoStatus) saveIoStatus.textContent = this.t('set.saveImported', { from: imported.gameVersion, to: SG.VERSION });
           this.loadSavedRun(imported);
         });
       }
@@ -2258,7 +2340,7 @@ window.SG = window.SG || {};
 
       const modTitleBtn = document.getElementById('btn-open-modules-title');
       if (modTitleBtn) {
-        modTitleBtn.textContent = `КАТАЛОГ МОДУЛЕЙ (${SG.UPGRADES.length})`;
+        modTitleBtn.textContent = this.t('title.catalog', { n: SG.UPGRADES.length });
       }
 
       const rerollBtn = document.getElementById('btn-upgrade-reroll');
@@ -2288,14 +2370,28 @@ window.SG = window.SG || {};
     }
 
     updateTitleBest() {
+      const loc = this.locale();
+      const scoreEl = document.getElementById('title-stat-score');
+      if (scoreEl) scoreEl.textContent = (this.bestScore || 0).toLocaleString(loc);
+      const waveEl = document.getElementById('title-stat-wave');
+      if (waveEl) waveEl.textContent = Math.max(this.bestWave || 1, this.bestEndlessWave || 0).toLocaleString(loc);
+      const killsEl = document.getElementById('title-stat-kills');
+      if (killsEl) killsEl.textContent = (this.totalKills || 0).toLocaleString(loc);
+
+      const sysEl = document.getElementById('title-sys-status');
+      if (sysEl) {
+        const backend = (this.gpu && this.gpu.isActive()) ? this.gpu.backend : '2D CANVAS';
+        sysEl.textContent = `● ${backend} • ${this.getPreset().label}`;
+      }
+
       const el = document.getElementById('title-best-record');
       if (el) {
         const endlessSuffix = this.bestEndlessWave > 0
-          ? ` • ∞ Махач: Волна ${this.bestEndlessWave.toLocaleString('ru-RU')}`
+          ? this.t('title.endlessRecSuffix', { wave: this.bestEndlessWave.toLocaleString(loc) })
           : '';
         el.textContent = this.bestScore > 0
-          ? `Рекорд: ${this.bestScore.toLocaleString('ru-RU')} очк. • Волна ${this.bestWave} • Всего уничтожено: ${this.totalKills}${endlessSuffix}`
-          : `Первый запуск квантового ядра${endlessSuffix}`;
+          ? `${this.t('title.record', { score: this.bestScore.toLocaleString(loc), wave: this.bestWave, kills: this.totalKills })}${endlessSuffix}`
+          : `${this.t('title.firstRun')}${endlessSuffix}`;
       }
       this.updateTitleSaveUI();
     }
@@ -2315,16 +2411,20 @@ window.SG = window.SG || {};
     }
 
     renderPauseSummary() {
-      const diff = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
+      const diffKey = this.settings.difficulty === 'easy'
+        ? 'title.diffEasyName'
+        : (this.settings.difficulty === 'hard' ? 'title.diffHardName' : 'title.diffNormalName');
+      const diffLabel = this.t(diffKey);
       const summary = document.getElementById('pause-summary');
       if (summary) {
         const p = this.player;
         const m = p.mods;
         const armorPct = Math.round(Math.min(0.75, m.armor) * 100);
         const gravPct = Math.round(m.wellGravMult * 100);
+        const loc = this.locale();
         summary.textContent = this.gameMode === 'endless'
-          ? `∞ МАХАЧ • Волна ${this.wave.toLocaleString('ru-RU')} • Ур. ${this.level} • ${diff.label} • HP ${Math.ceil(p.hp)}/${p.maxHp} • Броня ${armorPct}% • Грав ${gravPct}%`
-          : `Волна ${this.wave} • Ур. ${this.level} • ${diff.label} • HP ${Math.ceil(p.hp)}/${p.maxHp} • Броня ${armorPct}% • Грав ${gravPct}% • Автосохранение ✓`;
+          ? this.t('pause.summaryEndless', { wave: this.wave.toLocaleString(loc), lvl: this.level, diff: diffLabel, hp: Math.ceil(p.hp), maxHp: p.maxHp, arm: armorPct, grav: gravPct })
+          : this.t('pause.summaryOpen', { wave: this.wave, lvl: this.level, diff: diffLabel, hp: Math.ceil(p.hp), maxHp: p.maxHp, arm: armorPct, grav: gravPct });
       }
       const pillsEl = document.getElementById('pause-upgrades');
       if (pillsEl) {
@@ -2333,7 +2433,7 @@ window.SG = window.SG || {};
         if (entries.length === 0) {
           const span = document.createElement('span');
           span.className = 'upgrade-pill';
-          span.textContent = 'Модули ядра еще не выбраны';
+          span.textContent = this.t('pause.noModules');
           pillsEl.appendChild(span);
         } else {
           entries.forEach(([id, lvl]) => {
@@ -2482,7 +2582,7 @@ window.SG = window.SG || {};
         this.waypoint = {
           x: this.base.x,
           y: this.base.y,
-          label: 'БАЗА SINGULARIS',
+          label: this.t('wm.baseWpLabel'),
           color: '#00f0ff'
         };
         return;
@@ -2493,7 +2593,7 @@ window.SG = window.SG || {};
       this.waypoint = {
         x: Math.max(120, Math.min(WORLD_SIZE - 120, wx)),
         y: Math.max(120, Math.min(WORLD_SIZE - 120, wy)),
-        label: `МАЯК SEC-${colNames[colIdx]}${rowIdx}`,
+        label: this.t('wm.wpPrefix', { sec: `${colNames[colIdx]}${rowIdx}` }),
         color: '#ffd166'
       };
     }
@@ -2586,7 +2686,7 @@ window.SG = window.SG || {};
       ctx.font = '800 11px "JetBrains Mono", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText('БАЗА', bx, by + 11);
+      ctx.fillText(this.t('wm.baseLabel'), bx, by + 11);
 
       // Anomalies
       const hoveredAnom = (this._worldMapHover && this._worldMapHover.kind === 'anomaly')
@@ -2627,7 +2727,7 @@ window.SG = window.SG || {};
           ctx.fillStyle = '#ffb838';
           ctx.font = '700 8.5px "JetBrains Mono", system-ui, sans-serif';
           ctx.textBaseline = 'top';
-          ctx.fillText('БОСС', ax, ay + 11);
+          ctx.fillText(this.t('wm.boss'), ax, ay + 11);
         }
       }
 
@@ -2705,21 +2805,27 @@ window.SG = window.SG || {};
       const infoEl = document.getElementById('worldmap-info');
       if (infoEl) {
         if (hoveredAnom) {
-          const status = hoveredAnom.cleared ? 'ЗАЧИЩЕНА' : (hoveredAnom.hasBoss ? 'АКТИВНА • БОСС' : 'АКТИВНА');
+          const status = hoveredAnom.cleared
+            ? this.t('wm.statusCleared')
+            : (hoveredAnom.hasBoss ? this.t('wm.statusActiveBoss') : this.t('wm.statusActive'));
           const distM = this.player ? Math.round(Math.hypot(hoveredAnom.x - this.player.x, hoveredAnom.y - this.player.y) / 10) : 0;
-          infoEl.textContent = `[T${hoveredAnom.tier}] ${hoveredAnom.name} • ${status} • ${hoveredAnom.wavesTotal} волн • ${distM}м`;
+          infoEl.textContent = this.t('wm.infoAnom', { tier: hoveredAnom.tier, name: hoveredAnom.name, status, waves: hoveredAnom.wavesTotal, dist: distM });
         } else if (this._worldMapHover && this._worldMapHover.kind === 'base') {
           const distM = this.player ? Math.round(Math.hypot(this.base.x - this.player.x, this.base.y - this.player.y) / 10) : 0;
-          infoEl.textContent = `БАЗА SINGULARIS • Зона ремонта и строительства (R=260м) • ${distM}м`;
+          infoEl.textContent = this.t('wm.infoBase', { dist: distM });
         } else if (this.waypoint && this.player) {
           const distM = Math.round(Math.hypot(this.waypoint.x - this.player.x, this.waypoint.y - this.player.y) / 10);
-          infoEl.textContent = `GPS-МАЯК: ${this.waypoint.label} • Дистанция: ${distM}м`;
+          infoEl.textContent = this.t('wm.infoWp', { label: this.waypoint.label, dist: distM });
         } else if (this._worldMapHover && this._worldMapHover.kind === 'sector') {
           const colIdx = Math.min(11, Math.max(0, Math.floor((this._worldMapHover.wx / WORLD_SIZE) * 12)));
           const rowIdx = Math.min(12, Math.max(1, Math.floor((this._worldMapHover.wy / WORLD_SIZE) * 12) + 1));
-          infoEl.textContent = `Сектор ${colNames[colIdx]}${rowIdx} (${Math.round(this._worldMapHover.wx / 10)}м, ${Math.round(this._worldMapHover.wy / 10)}м) • Клик — поставить GPS-маяк`;
+          infoEl.textContent = this.t('wm.infoSector', {
+            sec: `${colNames[colIdx]}${rowIdx}`,
+            x: Math.round(this._worldMapHover.wx / 10),
+            y: Math.round(this._worldMapHover.wy / 10)
+          });
         } else {
-          infoEl.textContent = 'Клик по карте — поставить GPS-маяк • Клик по аномалии — захват цели';
+          infoEl.textContent = this.t('wm.hint');
         }
       }
     }
@@ -2751,19 +2857,21 @@ window.SG = window.SG || {};
       });
 
       const rarityLabels = {
-        common: 'ОБЫЧНЫЙ',
-        rare: 'РЕДКИЙ',
-        epic: 'ЭПИЧЕСКИЙ',
-        legendary: 'ЛЕГЕНДАРНЫЙ'
+        common: this.t('mod.rarityCommon'),
+        rare: this.t('mod.rarityRare'),
+        epic: this.t('mod.rarityEpic'),
+        legendary: this.t('mod.rarityLegend')
       };
 
       const q = (this.catalogQuery || '').trim().toLowerCase();
       const filtered = SG.UPGRADES.filter(u => {
         if (this.catalogFilter !== 'all' && this.getModuleCategory(u) !== this.catalogFilter) return false;
         if (!q) return true;
+        const dispTag = SG.I18n ? SG.I18n.translateTag(u.tag) : u.tag;
         return u.title.toLowerCase().includes(q)
           || u.desc.toLowerCase().includes(q)
           || u.tag.toLowerCase().includes(q)
+          || dispTag.toLowerCase().includes(q)
           || u.icon.toLowerCase().includes(q)
           || u.id.toLowerCase().includes(q)
           || (u.evolution && (
@@ -2774,7 +2882,12 @@ window.SG = window.SG || {};
       const ownedCount = Object.keys(this.upgradeStacks).length;
       const evolvedCount = this.evolvedUpgrades ? this.evolvedUpgrades.size : 0;
       if (sub) {
-        sub.textContent = `Показано модулей: ${filtered.length} из ${SG.UPGRADES.length} • Активно: ${ownedCount} • Эволюций: ${evolvedCount}`;
+        sub.textContent = this.t('mod.subDynamic', {
+          shown: filtered.length,
+          total: SG.UPGRADES.length,
+          owned: ownedCount,
+          evolved: evolvedCount
+        });
       }
 
       grid.innerHTML = '';
@@ -2785,21 +2898,22 @@ window.SG = window.SG || {};
         const card = document.createElement('article');
         card.className = `catalog-card rarity-${upg.rarity}${this.getTagClass(upg)}${curStack > 0 ? ' owned' : ''}${isEvolved ? ' evolved' : ''}${!reqMet ? ' locked-req' : ''}`;
         const stackText = isEvolved
-          ? 'ЭВОЛЮЦИЯ АКТИВНА [MAX]'
-          : (curStack > 0 ? `АКТИВЕН: ${curStack} / ${upg.maxStacks}` : `МАКС. УРОВЕНЬ: ${upg.maxStacks}`);
+          ? this.t('mod.stackEvo')
+          : (curStack > 0 ? this.t('mod.stackOwned', { cur: curStack, max: upg.maxStacks }) : this.t('mod.stackMax', { max: upg.maxStacks }));
         const displayTitle = (isEvolved && upg.evolution) ? upg.evolution.title : upg.title;
         const evoHtml = upg.evolution
           ? (isEvolved
-            ? `<div class="upg-evo-box"><strong>ЭВОЛЮЦИЯ:</strong> ${upg.evolution.perk}</div>`
-            : `<div class="upg-evo-hint">Макс. ур.: ${upg.evolution.title} — ${upg.evolution.perk}</div>`)
+            ? `<div class="upg-evo-box">${this.t('mod.evoActive', { perk: upg.evolution.perk })}</div>`
+            : `<div class="upg-evo-hint">${this.t('mod.evoNext', { title: upg.evolution.title, perk: upg.evolution.perk })}</div>`)
           : '';
         const reqHtml = (upg.requiresLabel && !reqMet)
-          ? `<div class="upg-req-hint">Требуется: ${upg.requiresLabel}</div>`
+          ? `<div class="upg-req-hint">${this.t('mod.req', { label: upg.requiresLabel })}</div>`
           : '';
+        const dispTag = SG.I18n ? SG.I18n.translateTag(upg.tag) : upg.tag;
         card.innerHTML = `
           <div class="upg-top">
-            <span class="upg-tag">${upg.tag}</span>
-            <span class="cat-rarity">${isEvolved ? 'ЭВОЛЮЦИЯ' : (rarityLabels[upg.rarity] || 'МОДУЛЬ')}</span>
+            <span class="upg-tag">${dispTag}</span>
+            <span class="cat-rarity">${isEvolved ? this.t('mod.rarityEvo') : (rarityLabels[upg.rarity] || this.t('mod.rarityMod'))}</span>
           </div>
           <div class="upg-icon">${upg.icon}</div>
           <h3 class="upg-title">${displayTitle}</h3>
@@ -3021,7 +3135,7 @@ window.SG = window.SG || {};
           e.vx += (dx / d) * 460 * falloff;
           e.vy += (dy / d) * 460 * falloff;
           e.stunTimer = Math.max(e.stunTimer, manualDetonate ? 0.95 : 0.45);
-          this.damageEnemy(e, hitDmg, '#ff85f2', manualDetonate ? 'СВЕРХНОВАЯ!' : null);
+          this.damageEnemy(e, hitDmg, '#ff85f2', manualDetonate ? this.t('game.supernova') : null);
           if (e.dead) killsInBlast++;
         }
       }
@@ -3182,13 +3296,14 @@ window.SG = window.SG || {};
     startWave(waveNum) {
       this.wave = waveNum;
       const isEndless = this.zone === 'endless';
+      const loc = this.locale();
       if (isEndless) {
-        this.waveBannerTitle = `∞ МАХАЧ • ВОЛНА ${waveNum.toLocaleString('ru-RU')}`;
+        this.waveBannerTitle = this.t('game.bannerWaveEndless', { wave: waveNum.toLocaleString(loc) });
         this.waveBannerColor = (waveNum % 5 === 0) ? '#ff3b6b' : '#ffb838';
       } else {
         this.waveBannerTitle = this.zone === 'anomaly'
-          ? `ВОЛНА ${this.dungeonWaveIndex}/${this.dungeonWavesTotal}`
-          : `ВОЛНА ${waveNum}`;
+          ? this.t('game.bannerWaveDungeon', { cur: this.dungeonWaveIndex, total: this.dungeonWavesTotal })
+          : this.t('game.bannerWave', { wave: waveNum });
         this.waveBannerColor = this.activeAnomaly ? this.activeAnomaly.color : null;
       }
       this.waveBannerTimer = 2.8;
@@ -3212,9 +3327,10 @@ window.SG = window.SG || {};
           ? (waveNum >= 100 ? 4 : (waveNum >= 50 ? 3 : (waveNum >= 20 ? 2 : 1)))
           : 1;
         const primaryBoss = (waveNum % 10 === 0) ? 'boss_archon' : 'boss_leviathan';
+        const bossLocName = SG.I18n ? SG.I18n.enemyName(primaryBoss, SG.ENEMY_TYPES[primaryBoss].name) : SG.ENEMY_TYPES[primaryBoss].name;
         this.waveSubtitle = bossCount > 1
-          ? `ТРЕВОГА ×${bossCount} // РОЙ БОССОВ`
-          : `ТРЕВОГА // ${SG.ENEMY_TYPES[primaryBoss].name}`;
+          ? this.t('game.bannerBossMulti', { count: bossCount })
+          : this.t('game.bannerBossSingle', { name: bossLocName });
         for (let b = 0; b < bossCount; b++) {
           const bossType = ((waveNum + b) % 2 === 0) ? 'boss_archon' : 'boss_leviathan';
           this.waveQueue.push({ type: bossType, scale: bossScale, wave: waveNum, isElite: false });
@@ -3235,23 +3351,17 @@ window.SG = window.SG || {};
           this.player.x,
           this.player.y - 120,
           bossCount > 1
-            ? `БОСС-ВОЛНА ${waveNum.toLocaleString('ru-RU')}: ×${bossCount} БОССА!`
-            : `БОСС ВОЛНЫ ${waveNum.toLocaleString('ru-RU')}: ${SG.ENEMY_TYPES[primaryBoss].name}!`,
+            ? this.t('game.bossToastMulti', { wave: waveNum.toLocaleString(loc), count: bossCount })
+            : this.t('game.bossToastSingle', { wave: waveNum.toLocaleString(loc), name: bossLocName }),
           '#ff3b6b',
           1.45,
           2.4
         );
       } else {
-        const subtitles = [
-          'КВАНТОВАЯ РАЗВЕДКА',
-          'НАСТУПЛЕНИЕ РОЯ',
-          'ГРАВИТАЦИОННЫЙ ШТОРМ',
-          'ПРОРЫВ ПЕРИМЕТРА',
-          'КРИТИЧЕСКАЯ ПЛОТНОСТЬ'
-        ];
+        const subKeys = ['game.sub1', 'game.sub2', 'game.sub3', 'game.sub4', 'game.sub5'];
         this.waveSubtitle = isEndless && waveNum >= 20
-          ? 'БЕСКОНЕЧНЫЙ МАХАЧ // ПЕРЕГРУЗКА'
-          : subtitles[(waveNum - 1) % subtitles.length];
+          ? this.t('game.subEndlessOverdrive')
+          : this.t(subKeys[(waveNum - 1) % subKeys.length]);
         const budget = isEndless
           ? Math.min(130, 8 + waveNum * 3 + Math.floor(Math.max(0, waveNum - 6) * 1.5))
           : Math.min(110, 6 + waveNum * 3 + Math.floor(Math.max(0, waveNum - 6) * 1.5));
@@ -3361,7 +3471,7 @@ window.SG = window.SG || {};
         const effExec = e.isElite ? this.player.mods.executeThreshold * 0.5 : this.player.mods.executeThreshold;
         if ((e.hp / e.maxHp) <= effExec) {
           e.hp = 0;
-          this.particles.addText(e.x, e.y - e.radius - 16, 'КАЗНЬ!', '#ff3b6b', 1.05);
+          this.particles.addText(e.x, e.y - e.radius - 16, this.t('game.execute'), '#ff3b6b', 1.05);
         }
       }
 
@@ -3385,14 +3495,8 @@ window.SG = window.SG || {};
       const newTier = this.combo >= 8.0 ? 4 : (this.combo >= 6.0 ? 3 : (this.combo >= 4.0 ? 2 : (this.combo >= 2.0 ? 1 : 0)));
       if (newTier > this.comboTier) {
         this.comboTier = newTier;
-        const tierLabels = [
-          '',
-          '×2.0 ДВОЙНОЙ РЕЗОНАНС!',
-          '×4.0 СВЕРХНОВАЯ СЕРИЯ!',
-          '×6.0 АРХИТЕКТОР ХАОСА!',
-          '×8.0 АБСОЛЮТНАЯ СИНГУЛЯРНОСТЬ!'
-        ];
-        this.particles.addText(this.player.x, this.player.y - 36, tierLabels[newTier], '#ffd166', 1.24, 1.4);
+        const tierKeys = ['', 'game.combo2', 'game.comboSupernova', 'game.combo6', 'game.combo8'];
+        this.particles.addText(this.player.x, this.player.y - 36, this.t(tierKeys[newTier]), '#ffd166', 1.24, 1.4);
         if (typeof this.audio.playComboMilestone === 'function') {
           this.audio.playComboMilestone(newTier);
         }
@@ -3619,7 +3723,7 @@ window.SG = window.SG || {};
             this.player.mods.scoreMultBonus += 0.05;
             loops++;
           }
-          this.particles.addText(this.player.x, this.player.y - 30, 'ПЕРЕГРУЗКА ЯДРА: +6% УРОН • +4% HP!', '#ffd166', 1.18, 1.4);
+          this.particles.addText(this.player.x, this.player.y - 30, this.t('game.overdriveToast'), '#ffd166', 1.18, 1.4);
           this.updateHUD();
           return;
         }
@@ -3663,7 +3767,15 @@ window.SG = window.SG || {};
         const critPct = Math.round(m.critChance * 100);
         const armPct = Math.round(Math.min(0.82, m.armor) * 100);
         const evoCnt = this.evolvedUpgrades ? this.evolvedUpgrades.size : 0;
-        statsBar.textContent = `Урон: ${dmgPct}% • Темп: ${ratePct}% • Крит: ${critPct}% • Броня: ${armPct}% • Щит: ${Math.ceil(p.maxShield)} • Дыры: ${m.maxWells} • Эволюций: ${evoCnt}`;
+        statsBar.textContent = this.t('upg.statsBar', {
+          dmg: dmgPct,
+          rate: ratePct,
+          crit: critPct,
+          arm: armPct,
+          shield: Math.ceil(p.maxShield),
+          wells: m.maxWells,
+          evos: evoCnt
+        });
       }
 
       const container = document.getElementById('upgrade-cards');
@@ -3684,17 +3796,18 @@ window.SG = window.SG || {};
         btn.style.setProperty('--card-idx', String(idx));
         const evoHtml = upg.evolution
           ? (willEvolve
-            ? `<div class="upg-evo-box"><strong>АПЕКС-ЭВОЛЮЦИЯ: ${upg.evolution.title}</strong> — ${upg.evolution.perk}</div>`
-            : `<div class="upg-evo-hint">Макс. ур.: ${upg.evolution.title}</div>`)
+            ? `<div class="upg-evo-box">${this.t('upg.evoBox', { title: upg.evolution.title, perk: upg.evolution.perk })}</div>`
+            : `<div class="upg-evo-hint">${this.t('upg.evoHint', { title: upg.evolution.title })}</div>`)
           : '';
         const levelText = curStack === 0
-          ? `Новый: 0 → 1 / ${upg.maxStacks}`
+          ? this.t('upg.lvlNew', { max: upg.maxStacks })
           : (willEvolve
-            ? `Ур. ${curStack} → ${curStack + 1} / ${upg.maxStacks} • ПРОБУДИТ ЭВОЛЮЦИЮ`
-            : `Улучшение: ${curStack} → ${curStack + 1} / ${upg.maxStacks}`);
+            ? this.t('upg.lvlEvo', { cur: curStack, next: curStack + 1, max: upg.maxStacks })
+            : this.t('upg.lvlUp', { cur: curStack, next: curStack + 1, max: upg.maxStacks }));
+        const dispTag = SG.I18n ? SG.I18n.translateTag(upg.tag) : upg.tag;
         btn.innerHTML = `
           <div class="upg-top">
-            <span class="upg-tag">${willEvolve ? `ЭВОЛЮЦИЯ -> ${upg.evolution.title}` : upg.tag}</span>
+            <span class="upg-tag">${willEvolve ? this.t('upg.evoTag', { title: upg.evolution.title }) : dispTag}</span>
             <span class="upg-key">[${idx + 1}]</span>
           </div>
           <div class="upg-icon">${upg.icon}</div>
@@ -3713,7 +3826,7 @@ window.SG = window.SG || {};
       const rerollBtn = document.getElementById('btn-upgrade-reroll');
       if (rerollBtn) {
         const eligibleCount = SG.countEligibleUpgrades(this.upgradeStacks, this.evolvedUpgrades);
-        rerollBtn.textContent = `Перебросить (${this.rerolls}) [R]`;
+        rerollBtn.textContent = this.t('upg.reroll', { n: this.rerolls });
         rerollBtn.disabled = this.rerolls <= 0 || eligibleCount <= this.currentChoices.length;
       }
     }
@@ -3879,13 +3992,14 @@ window.SG = window.SG || {};
 
       const goHeading = document.getElementById('go-heading');
       if (goHeading) {
-        goHeading.textContent = isEndless ? 'Коллапс в Бесконечном Махаче' : 'Миссия завершена';
+        goHeading.textContent = isEndless ? this.t('go.headingEndless') : this.t('go.heading');
       }
 
-      document.getElementById('go-score').textContent = this.score.toLocaleString('ru-RU');
-      document.getElementById('go-best').textContent = (isEndless ? this.bestEndlessScore : this.bestScore).toLocaleString('ru-RU');
+      const loc = this.locale();
+      document.getElementById('go-score').textContent = this.score.toLocaleString(loc);
+      document.getElementById('go-best').textContent = (isEndless ? this.bestEndlessScore : this.bestScore).toLocaleString(loc);
       document.getElementById('go-wave').textContent = isEndless
-        ? `∞ ВОЛНА ${this.wave.toLocaleString('ru-RU')}`
+        ? `∞ ${this.t('hud.waveDefault', { wave: this.wave.toLocaleString(loc) })}`
         : `${this.stats.anomaliesCleared || 0} / В.${this.wave}`;
       document.getElementById('go-kills').textContent = String(this.stats.kills);
       document.getElementById('go-slingshots').textContent = String(this.stats.slingshots);
@@ -3902,7 +4016,7 @@ window.SG = window.SG || {};
         if (entries.length === 0) {
           const sp = document.createElement('span');
           sp.className = 'upgrade-pill';
-          sp.textContent = 'Базовая конфигурация ядра';
+          sp.textContent = this.t('go.baseBuild');
           buildList.appendChild(sp);
         } else {
           entries.sort((a, b) => {
@@ -3941,12 +4055,48 @@ window.SG = window.SG || {};
 
       // Ambient background warp when paused / in menu / modal open
       if (this.state !== 'playing' || this.hasAnyModalOpen()) {
-        if (this.state === 'title') {
-          this.camera.x = Math.max(0, (this.bounds.width - this.viewport.width) * 0.5);
-          this.camera.y = Math.max(0, (this.bounds.height - this.viewport.height) * 0.5);
+        const nowSec = performance.now() * 0.001;
+        if (this.state === 'title' && this.base) {
+          const focusX = this.viewport.width >= 960 ? 0.64 : 0.5;
+          const focusY = this.viewport.width >= 960 ? 0.47 : 0.42;
+          this.camera.x = Math.max(0, Math.min(this.bounds.width - this.viewport.width, this.base.x - this.viewport.width * focusX));
+          this.camera.y = Math.max(0, Math.min(this.bounds.height - this.viewport.height, this.base.y - this.viewport.height * focusY));
           this.grid.setViewOrigin(this.camera.x, this.camera.y);
+
+          const orbAng = nowSec * 0.48;
+          if (this.player) {
+            const orbitR = 148;
+            this.player.x = this.base.x + Math.cos(orbAng) * orbitR;
+            this.player.y = this.base.y + Math.sin(orbAng) * orbitR;
+            this.player.aimAngle = orbAng + Math.PI * 0.5;
+            this.player.vx = Math.cos(this.player.aimAngle) * 140;
+            this.player.vy = Math.sin(this.player.aimAngle) * 140;
+            if (Math.random() < 0.35) {
+              this.particles.spawn(
+                this.player.x - Math.cos(this.player.aimAngle) * 14,
+                this.player.y - Math.sin(this.player.aimAngle) * 14,
+                -Math.cos(this.player.aimAngle) * 90,
+                -Math.sin(this.player.aimAngle) * 90,
+                { size: 2.0, life: 0.28, color: '#00f0ff', streak: false, gravScale: 0.15 }
+              );
+            }
+          }
+
+          if (this.wells.length === 0 && typeof SG.GravityWell === 'function') {
+            const demoWell = new SG.GravityWell(this.base.x - 255, this.base.y, false, {});
+            demoWell._titleAmbient = true;
+            this.wells.push(demoWell);
+          }
+          if (this.wells[0] && this.wells[0]._titleAmbient) {
+            const w = this.wells[0];
+            const wAng = orbAng + Math.PI;
+            w.x = this.base.x + Math.cos(wAng) * 255;
+            w.y = this.base.y + Math.sin(wAng) * 255;
+            w.life = w.maxLife * 0.75;
+            w.update(dt, this.grid, this.particles);
+          }
         }
-        const t = performance.now() * 0.0015;
+        const t = nowSec * 1.5;
         this.grid.applyRadialForce(
           this.camera.x + this.viewport.width * 0.5 + Math.cos(t) * 180,
           this.camera.y + this.viewport.height * 0.5 + Math.sin(t * 1.3) * 110,
@@ -4235,7 +4385,7 @@ window.SG = window.SG || {};
 
         if (this.waypoint && Math.hypot(this.player.x - this.waypoint.x, this.player.y - this.waypoint.y) < 140) {
           this.waypoint = null;
-          this.particles.addText(this.player.x, this.player.y - 32, 'ТОЧКА ДОСТИГНУТА', '#ffd166', 1.1, 1.5);
+          this.particles.addText(this.player.x, this.player.y - 32, this.t('game.wpReached'), '#ffd166', 1.1, 1.5);
         }
 
         for (let i = 0; i < this.anomalies.length; i++) {
@@ -4272,7 +4422,7 @@ window.SG = window.SG || {};
             this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.20);
             this.player.shield = this.player.maxShield;
             this.rerolls++;
-            this.particles.addText(this.player.x, this.player.y - 34, 'БОСС ПОВЕРЖЕН • +1 ПЕРЕБРОС • ЩИТ 100%', '#ffd166', 1.18, 1.8);
+            this.particles.addText(this.player.x, this.player.y - 34, this.t('game.bossClearedToast'), '#ffd166', 1.18, 1.8);
           } else {
             this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.08);
             this.player.shield = Math.min(this.player.maxShield, this.player.shield + this.player.maxShield * 0.25);
@@ -5406,7 +5556,10 @@ window.SG = window.SG || {};
       const els = this.hudEls;
       if (els.hud) els.hud.hidden = (this.state === 'title');
       if (els.fpsBadge) els.fpsBadge.hidden = !this.settings.showFps || this.state === 'title';
-      if (els.versionBadge) els.versionBadge.classList.toggle('in-game', this.state === 'playing');
+      if (els.versionBadge) {
+        els.versionBadge.hidden = (this.state === 'title');
+        els.versionBadge.classList.toggle('in-game', this.state === 'playing');
+      }
       const touchEl = (this.touchEls && this.touchEls.root) || document.getElementById('touch-controls');
       if (touchEl) touchEl.hidden = !(this.isTouchDevice && this.state === 'playing');
       const pillsEl = document.querySelector('.ability-pills');
@@ -5424,49 +5577,53 @@ window.SG = window.SG || {};
       if (els.barChrono) els.barChrono.style.width = `${Math.max(0, (p.chrono / p.maxChrono) * 100)}%`;
       if (els.barXp) els.barXp.style.width = `${Math.min(100, (this.xp / this.xpNext) * 100)}%`;
 
-      if (els.score) els.score.textContent = this.score.toLocaleString('ru-RU');
+      const loc = this.locale();
+      if (els.score) els.score.textContent = this.score.toLocaleString(loc);
       if (els.combo) els.combo.textContent = `×${this.combo.toFixed(1)}`;
       if (els.wave) {
         if (this.zone === 'overworld') {
           els.wave.textContent = this.inBaseZone
-            ? 'БАЗА • РЕМОНТ'
-            : `МИР • ЗАЧИЩЕНО: ${this.stats ? (this.stats.anomaliesCleared || 0) : 0}`;
+            ? this.t('hud.waveBase')
+            : this.t('hud.waveWorld', { n: this.stats ? (this.stats.anomaliesCleared || 0) : 0 });
         } else if (this.zone === 'endless') {
-          els.wave.textContent = `∞ ВОЛНА ${this.wave.toLocaleString('ru-RU')} • ☠ ${this.enemies.length + this.waveQueue.length}`;
+          els.wave.textContent = this.t('hud.waveEndless', {
+            wave: this.wave.toLocaleString(loc),
+            enemies: this.enemies.length + this.waveQueue.length
+          });
         } else if (this.anomalyCleared) {
-          els.wave.textContent = 'АНОМАЛИЯ ЗАЧИЩЕНА';
+          els.wave.textContent = this.t('hud.waveAnomalyCleared');
         } else {
           const tier = this.activeAnomaly ? this.activeAnomaly.tier : 1;
-          els.wave.textContent = `T${tier} • ВОЛНА ${this.dungeonWaveIndex}/${this.dungeonWavesTotal}`;
+          els.wave.textContent = this.t('hud.waveAnomaly', { tier, cur: this.dungeonWaveIndex, total: this.dungeonWavesTotal });
         }
       }
-      if (els.level) els.level.textContent = `УР. ${this.level}`;
+      if (els.level) els.level.textContent = this.t('hud.level', { n: this.level });
 
       if (els.dash) {
         els.dash.textContent = p.dashCooldown > 0
-          ? `[Shift] Рывок: ${p.dashCooldown.toFixed(1)}с`
-          : '[Shift] Рывок: ГОТОВ';
+          ? this.t('hud.dashCd', { s: p.dashCooldown.toFixed(1) })
+          : this.t('hud.dashReady');
         els.dash.classList.toggle('ready', p.dashCooldown <= 0);
       }
 
       if (els.rewind) {
         els.rewind.textContent = p.rewindCooldown > 0
-          ? `[Q] Откат: ${p.rewindCooldown.toFixed(1)}с`
-          : '[Q] Откат: ГОТОВ';
+          ? this.t('hud.rewindCd', { s: p.rewindCooldown.toFixed(1) })
+          : this.t('hud.rewindReady');
         els.rewind.classList.toggle('ready', p.rewindCooldown <= 0);
       }
 
       if (els.detonate) {
         els.detonate.textContent = p.detonateCooldown > 0
-          ? `[E] Взрыв: ${p.detonateCooldown.toFixed(1)}с`
-          : '[E] Взрыв: ГОТОВ';
+          ? this.t('hud.detonateCd', { s: p.detonateCooldown.toFixed(1) })
+          : this.t('hud.detonateReady');
         els.detonate.classList.toggle('ready', p.detonateCooldown <= 0);
       }
 
       if (els.wellCd) {
         els.wellCd.textContent = p.wellCooldown > 0
-          ? `[ПКМ] Дыра: ${p.wellCooldown.toFixed(1)}с`
-          : '[ПКМ] Дыра: ГОТОВА';
+          ? this.t('hud.wellCd', { s: p.wellCooldown.toFixed(1) })
+          : this.t('hud.wellReady');
         els.wellCd.classList.toggle('ready', p.wellCooldown <= 0);
       }
 
@@ -5501,7 +5658,7 @@ window.SG = window.SG || {};
       }
 
       if (els.menuBtn) {
-        els.menuBtn.innerHTML = this.isTouchDevice ? 'Пауза' : 'Меню <span class="key-hint">[Esc]</span>';
+        els.menuBtn.innerHTML = this.isTouchDevice ? this.t('hud.menuTouch') : this.t('hud.menu');
       }
 
       if (els.returnBtn) {
@@ -5509,15 +5666,15 @@ window.SG = window.SG || {};
         els.returnBtn.hidden = !showReturn;
         if (showReturn) {
           els.returnBtn.innerHTML = this.zone === 'anomaly'
-            ? (this.isTouchDevice ? 'Выход' : 'На базу <span class="key-hint">[T]</span>')
-            : (this.isTouchDevice ? 'На базу' : 'На базу <span class="key-hint">[T]</span>');
+            ? (this.isTouchDevice ? this.t('hud.exitAnomalyTouch') : this.t('hud.exitAnomaly'))
+            : (this.isTouchDevice ? this.t('hud.returnTouch') : this.t('hud.return'));
         }
       }
 
       if (els.mapBtn) {
         els.mapBtn.hidden = (this.zone !== 'overworld');
         if (this.zone === 'overworld') {
-          els.mapBtn.innerHTML = this.isTouchDevice ? 'Карта' : 'Карта <span class="key-hint">[Tab]</span>';
+          els.mapBtn.innerHTML = this.isTouchDevice ? this.t('hud.mapTouch') : this.t('hud.map');
         }
       }
 
@@ -5525,14 +5682,12 @@ window.SG = window.SG || {};
         if (this.isTouchDevice) {
           els.muteBtn.textContent = this.audio.muted ? '🔇' : '🔊';
         } else {
-          els.muteBtn.textContent = this.audio.muted ? 'Звук: ВЫКЛ' : 'Звук: ВКЛ';
+          els.muteBtn.textContent = this.audio.muted ? this.t('hud.muteOff') : this.t('hud.muteOn');
         }
       }
 
       if (els.polBtn) {
-        els.polBtn.innerHTML = this.repulsorMode
-          ? 'Белая дыра <span class="key-hint">[R]</span>'
-          : 'Черная дыра <span class="key-hint">[R]</span>';
+        els.polBtn.innerHTML = this.repulsorMode ? this.t('hud.whiteHole') : this.t('hud.blackHole');
         els.polBtn.classList.toggle('repulsor', this.repulsorMode);
       }
 
@@ -5560,11 +5715,11 @@ window.SG = window.SG || {};
 
         if (te.well && te.well.el) {
           te.well.el.classList.toggle('repulsor', this.repulsorMode);
-          if (te.well.label) te.well.label.textContent = this.repulsorMode ? 'БЕЛ.Д' : 'ДЫРА';
+          if (te.well.label) te.well.label.textContent = this.repulsorMode ? this.t('touch.wellWhite') : this.t('touch.wellBlack');
         }
         if (te.polarity && te.polarity.el) {
           te.polarity.el.classList.toggle('repulsor', this.repulsorMode);
-          if (te.polarity.label) te.polarity.label.textContent = this.repulsorMode ? 'БЕЛ' : 'ЧЁРН';
+          if (te.polarity.label) te.polarity.label.textContent = this.repulsorMode ? this.t('touch.polWhite') : this.t('touch.polBlack');
         }
         if (te.detonate && te.detonate.el) {
           const hasWells = this.wells.length > 0;
@@ -5587,7 +5742,7 @@ window.SG = window.SG || {};
       const camY = this.camera.y;
       const useSprites = !!(this.settings.useTextures && SG.Sprites && SG.Sprites.ready);
       const preset = this.getPreset();
-      const useGpu = !!(this.gpu && this.gpu.isActive());
+      let useGpu = !!(this.gpu && this.gpu.isActive());
       const nowSec = performance.now() * 0.001;
 
       let shakeX = 0;
@@ -5598,31 +5753,37 @@ window.SG = window.SG || {};
       }
 
       if (useGpu) {
-        this.gpu.renderFrame({
-          width: w,
-          height: h,
-          dpr: this.dpr,
-          timeSec: nowSec,
-          timeScale: this.timeScale,
-          shakeX,
-          shakeY,
-          camX,
-          camY,
-          skipEntityPolys: useSprites,
-          useTextures: useSprites,
-          stars: this.stars,
-          grid: this.grid,
-          particles: this.particles,
-          wells: this.wells,
-          bullets: this.bullets,
-          enemies: this.enemies,
-          pickups: this.pickups,
-          player: this.player,
-          state: this.state,
-          quality: this.settings.quality,
-          preset,
-          isTouchDevice: this.isTouchDevice
-        });
+        try {
+          this.gpu.renderFrame({
+            width: w,
+            height: h,
+            dpr: this.dpr,
+            timeSec: nowSec,
+            timeScale: this.timeScale,
+            shakeX,
+            shakeY,
+            camX,
+            camY,
+            skipEntityPolys: useSprites,
+            useTextures: useSprites,
+            stars: this.stars,
+            grid: this.grid,
+            particles: this.particles,
+            wells: this.wells,
+            bullets: this.bullets,
+            enemies: this.enemies,
+            pickups: this.pickups,
+            player: this.player,
+            state: this.state,
+            quality: this.settings.quality,
+            preset,
+            isTouchDevice: this.isTouchDevice
+          });
+        } catch (err) {
+          console.error('[SINGULARIS] GPU render error, falling back to 2D:', err);
+          this.gpu.setEnabled(false);
+          useGpu = false;
+        }
       }
 
       ctx.save();
@@ -5735,7 +5896,7 @@ window.SG = window.SG || {};
             ctx.fillStyle = wpCol;
             ctx.font = '800 10.5px "JetBrains Mono", system-ui, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(this.waypoint.label || 'МАЯК', wx, wy - pulse - 8);
+            ctx.fillText(this.waypoint.label || this.t('wm.legWp'), wx, wy - pulse - 8);
             ctx.restore();
           }
         }
@@ -5960,7 +6121,7 @@ window.SG = window.SG || {};
         }
 
         // Player Render
-        if (this.state === 'playing' || this.state === 'upgrade' || this.state === 'paused') {
+        if (this.state === 'playing' || this.state === 'upgrade' || this.state === 'paused' || this.state === 'title') {
           this.player.render(ctx, { useSprites, skipAuras: useGpu });
         }
       }
@@ -6116,7 +6277,7 @@ window.SG = window.SG || {};
         const alpha = Math.min(1, t * 2.2, (3.6 - t) * 3.2 + 0.2);
         const isBossW = ((this.zone === 'anomaly' && !this.anomalyCleared) || this.zone === 'endless') && (this.wave % 5 === 0);
         const accentCol = this.waveBannerColor || (isBossW ? '#ff3b6b' : '#00f0ff');
-        const titleTxt = this.waveBannerTitle || `ВОЛНА ${this.wave}`;
+        const titleTxt = this.waveBannerTitle || this.t('hud.waveDefault', { wave: this.wave });
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         const cy = 98;
@@ -6134,7 +6295,7 @@ window.SG = window.SG || {};
 
         ctx.font = '700 10.5px "JetBrains Mono", system-ui, sans-serif';
         ctx.fillStyle = this.waveBannerColor || (isBossW ? '#ff6b8b' : '#7df9ff');
-        ctx.fillText(this.waveSubtitle || 'СЕКТОР АКТИВЕН', w * 0.5, cy + 14);
+        ctx.fillText(this.waveSubtitle || this.t('game.sectorActive'), w * 0.5, cy + 14);
         ctx.restore();
       }
 
@@ -6355,34 +6516,42 @@ window.SG = window.SG || {};
       ctx.font = '700 9px "JetBrains Mono", system-ui, sans-serif';
       ctx.textAlign = 'right';
       const zoneTag = this.zone === 'endless'
-        ? `∞ ВОЛНА ${this.wave.toLocaleString('ru-RU')}`
+        ? `∞ ${this.t('hud.waveDefault', { wave: this.wave.toLocaleString(this.locale()) })}`
         : (this.zone === 'anomaly'
-          ? `АНОМАЛИЯ T${this.activeAnomaly ? this.activeAnomaly.tier : 1}`
-          : `[Tab] КАРТА • SEC ${col}:${row}`);
+          ? this.t('game.minimapAnomaly', { tier: this.activeAnomaly ? this.activeAnomaly.tier : 1 })
+          : this.t('game.minimapWorld', { col, row }));
       ctx.fillText(zoneTag, mx + size - 3, my + size + 11);
 
       ctx.restore();
     }
 
     loop(now) {
-      const dt = (now - this.lastTime) / 1000;
-      this.lastTime = now;
-      if (dt > 0 && dt < 0.25) {
-        const instFps = 1 / dt;
-        this.fpsAvg = this.fpsAvg * 0.9 + instFps * 0.1;
-      }
-      this.fpsTimer += dt;
-      if (this.fpsTimer >= 0.25) {
-        this.fpsTimer = 0;
-        const badge = this.hudEls && this.hudEls.fpsBadge;
-        if (badge && this.settings.showFps && this.state !== 'title') {
-          const backend = (this.gpu && this.gpu.isActive()) ? this.gpu.backend : '2D';
-          badge.textContent = `${Math.round(this.fpsAvg)} FPS • ${backend} • ${this.getPreset().label}`;
+      requestAnimationFrame((t) => this.loop(t));
+      try {
+        const dt = (now - this.lastTime) / 1000;
+        this.lastTime = now;
+        if (dt > 0 && dt < 0.25) {
+          const instFps = 1 / dt;
+          this.fpsAvg = this.fpsAvg * 0.9 + instFps * 0.1;
+        }
+        this.fpsTimer += dt;
+        if (this.fpsTimer >= 0.25) {
+          this.fpsTimer = 0;
+          const badge = this.hudEls && this.hudEls.fpsBadge;
+          if (badge && this.settings.showFps && this.state !== 'title') {
+            const backend = (this.gpu && this.gpu.isActive()) ? this.gpu.backend : '2D';
+            badge.textContent = `${Math.round(this.fpsAvg)} FPS • ${backend} • ${this.getPreset().label}`;
+          }
+        }
+        this.update(dt);
+        this.render();
+      } catch (err) {
+        const errNow = performance.now();
+        if (!this._lastLoopErrAt || errNow - this._lastLoopErrAt >= 2000) {
+          this._lastLoopErrAt = errNow;
+          console.error('[SINGULARIS] Game loop error:', err);
         }
       }
-      this.update(dt);
-      this.render();
-      requestAnimationFrame((t) => this.loop(t));
     }
   }
 

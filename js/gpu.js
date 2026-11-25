@@ -353,6 +353,28 @@ window.SG = window.SG || {};
       batch.len = i;
     }
 
+    pushThickLine(batch, x1, y1, x2, y2, thickness, r, g, b, a) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (!Number.isFinite(len) || len < 0.001) return;
+      const half = Math.max(0.5, thickness * 0.5);
+      const nx = (-dy / len) * half;
+      const ny = (dx / len) * half;
+      this.pushTri(
+        batch,
+        x1 - nx, y1 - ny, r, g, b, a,
+        x1 + nx, y1 + ny, r, g, b, a,
+        x2 + nx, y2 + ny, r, g, b, a
+      );
+      this.pushTri(
+        batch,
+        x1 - nx, y1 - ny, r, g, b, a,
+        x2 + nx, y2 + ny, r, g, b, a,
+        x2 - nx, y2 - ny, r, g, b, a
+      );
+    }
+
     pushTri(batch, x1, y1, r1, g1, b1, a1, x2, y2, r2, g2, b2, a2, x3, y3, r3, g3, b3, a3) {
       this.reserve(batch, 18);
       const d = batch.data;
@@ -770,7 +792,7 @@ window.SG = window.SG || {};
       }
 
       // 8. Pack Player, Auras, Drones, Clones & Afterimages
-      if (player && (state === 'playing' || state === 'upgrade' || state === 'paused')) {
+      if (player && (state === 'playing' || state === 'upgrade' || state === 'paused' || state === 'title')) {
         // Temporal rewind 3s ghost & Afterimages (when vector mode)
         if (!skipEntityPolys) {
           if (player.history.length > 15 && player.rewindCooldown <= 0) {

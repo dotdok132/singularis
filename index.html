@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>SINGULARIS — Архитектор Гравитации</title>
-  <link rel="stylesheet" href="styles.css?v=2.3.0">
+  <link rel="stylesheet" href="styles.css?v=2.4.0">
 </head>
 <body>
   <canvas id="gpu-canvas"></canvas>
@@ -15,24 +15,24 @@
     <div class="hud-left">
       <div class="hud-panel hud-bars">
         <div class="bar-row">
-          <span class="bar-label">КОРПУС</span>
+          <span class="bar-label" data-i18n="hud.hull">КОРПУС</span>
           <div class="bar-track"><div id="bar-hp" class="bar-fill fill-hp" style="width:100%"></div></div>
           <span id="val-hp" class="bar-val">100/100</span>
         </div>
         <div class="bar-row">
-          <span class="bar-label">ЩИТ</span>
+          <span class="bar-label" data-i18n="hud.shield">ЩИТ</span>
           <div class="bar-track"><div id="bar-shield" class="bar-fill fill-shield" style="width:100%"></div></div>
           <span id="val-shield" class="bar-val">60</span>
         </div>
         <div class="bar-row">
-          <span class="bar-label">ХРОНО</span>
+          <span class="bar-label" data-i18n="hud.chrono">ХРОНО</span>
           <div class="bar-track"><div id="bar-chrono" class="bar-fill fill-chrono" style="width:100%"></div></div>
           <span class="bar-val key-hint-val">SPACE</span>
         </div>
         <div class="bar-row">
           <span class="bar-label" id="hud-level">УР. 1</span>
           <div class="bar-track"><div id="bar-xp" class="bar-fill fill-xp" style="width:0%"></div></div>
-          <span class="bar-val">ОПЫТ</span>
+          <span class="bar-val" data-i18n="hud.xp">ОПЫТ</span>
         </div>
       </div>
       <div id="hud-build-strip" class="hud-build-strip" aria-label="Активные модули"></div>
@@ -53,8 +53,8 @@
         <button type="button" id="btn-hud-map" class="hud-btn" hidden>Карта <span class="key-hint">[Tab]</span></button>
         <button type="button" id="btn-hud-polarity" class="hud-btn desktop-only-hud">Черная дыра <span class="key-hint">[R]</span></button>
         <button type="button" id="btn-hud-mute" class="hud-btn">Звук: ВКЛ</button>
-        <button type="button" id="btn-hud-modules" class="hud-btn desktop-only-hud">Модули <span class="key-hint">[B]</span></button>
-        <button type="button" id="btn-hud-codex" class="hud-btn desktop-only-hud">Кодекс <span class="key-hint">[H]</span></button>
+        <button type="button" id="btn-hud-modules" class="hud-btn desktop-only-hud" data-i18n-html="hud.modules">Модули <span class="key-hint">[B]</span></button>
+        <button type="button" id="btn-hud-codex" class="hud-btn desktop-only-hud" data-i18n-html="hud.codex">Кодекс <span class="key-hint">[H]</span></button>
         <button type="button" id="btn-hud-fullscreen" class="hud-btn touch-only-hud" aria-label="Полный экран">⛶</button>
       </div>
       <div class="ability-pills">
@@ -69,7 +69,7 @@
     </div>
   </header>
   <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
-  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v2.3.0</div>
+  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v2.4.0</div>
 
   <!-- Mobile / Tablet Twin-Stick & Ability Arc Controls -->
   <div id="touch-controls" class="touch-controls" hidden>
@@ -80,36 +80,36 @@
     </div>
     <div id="touch-right-cluster" class="touch-right-cluster" aria-label="Прицеливание и способности">
       <button type="button" id="touch-polarity" class="touch-btn touch-polarity" aria-label="Переключить полярность дыры">
-        <span class="tbtn-label">ЧЁРН</span>
+        <span class="tbtn-label" data-i18n="touch.polBlack">ЧЁРН</span>
       </button>
       <button type="button" id="touch-detonate" class="touch-btn touch-detonate" aria-label="Взорвать дыры">
         <span class="tbtn-cd"></span>
-        <span class="tbtn-label">ВЗРЫВ</span>
+        <span class="tbtn-label" data-i18n="touch.detonate">ВЗРЫВ</span>
         <span class="tbtn-timer"></span>
       </button>
       <button type="button" id="touch-rewind" class="touch-btn touch-rewind" aria-label="Откат времени">
         <span class="tbtn-cd"></span>
-        <span class="tbtn-label">ОТКАТ</span>
+        <span class="tbtn-label" data-i18n="touch.rewind">ОТКАТ</span>
         <span class="tbtn-timer"></span>
       </button>
       <button type="button" id="touch-bt" class="touch-btn touch-bt" aria-label="Замедление времени">
         <span class="tbtn-cd"></span>
-        <span class="tbtn-label">ХРОНО</span>
+        <span class="tbtn-label" data-i18n="touch.chrono">ХРОНО</span>
         <span class="tbtn-timer"></span>
       </button>
       <button type="button" id="touch-well" class="touch-btn touch-well touch-violet" aria-label="Поставить гравитационную дыру">
         <span class="tbtn-cd"></span>
-        <span class="tbtn-label">ДЫРА</span>
+        <span class="tbtn-label" data-i18n="touch.wellBlack">ДЫРА</span>
         <span class="tbtn-timer"></span>
       </button>
       <button type="button" id="touch-dash" class="touch-btn touch-dash" aria-label="Фазовый рывок">
         <span class="tbtn-cd"></span>
-        <span class="tbtn-label">РЫВОК</span>
+        <span class="tbtn-label" data-i18n="touch.dash">РЫВОК</span>
         <span class="tbtn-timer"></span>
       </button>
       <div id="touch-aim-zone" class="touch-aim-zone" aria-label="Джойстик прицела и огня">
         <div id="touch-aim-base" class="touch-aim-base">
-          <div id="touch-aim-knob" class="touch-aim-knob">ОГОНЬ</div>
+          <div id="touch-aim-knob" class="touch-aim-knob" data-i18n="touch.fire">ОГОНЬ</div>
         </div>
       </div>
     </div>
@@ -118,132 +118,181 @@
   <!-- Portrait Orientation Prompt (Mobile) -->
   <div id="rotate-overlay" class="rotate-overlay" aria-live="polite">
     <div class="rotate-icon" aria-hidden="true">📱↻</div>
-    <div class="rotate-title">ПОВЕРНИТЕ ЭКРАН</div>
-    <div class="rotate-sub">Для комфортной игры переверните телефон горизонтально</div>
-    <button type="button" id="btn-dismiss-rotate" class="btn-ghost rotate-dismiss">Играть вертикально</button>
+    <div class="rotate-title" data-i18n="rotate.title">ПОВЕРНИТЕ ЭКРАН</div>
+    <div class="rotate-sub" data-i18n="rotate.sub">Для комфортной игры переверните телефон горизонтально</div>
+    <button type="button" id="btn-dismiss-rotate" class="btn-ghost rotate-dismiss" data-i18n="rotate.dismiss">Играть вертикально</button>
   </div>
 
-  <!-- Main Menu Modal (Native <dialog>) -->
-  <dialog id="title-dialog" aria-labelledby="title-heading">
-    <div class="modal-eyebrow">ТАКТИЧЕСКАЯ РЕЛЯТИВИСТСКАЯ ПЕСОЧНИЦА • ROGUELIKE</div>
-    <h1 id="title-heading" class="modal-title">SINGULARIS: АРХИТЕКТОР ГРАВИТАЦИИ</h1>
-    <p class="modal-sub">
-      Исследуйте мир вокруг вашей Базы, входите в пространственные Аномалии для зачистки данжей с боссами, собирайте модули и возвращайтесь в док ремонта.
-    </p>
+  <!-- Main Menu Modal (Full-Screen AAA Client Lobby) -->
+  <dialog id="title-dialog" class="main-menu-shell" aria-labelledby="title-heading">
+    <header class="mm-topbar">
+      <div class="mm-brand">
+        <span class="mm-emblem" aria-hidden="true">◈</span>
+        <span class="mm-wordmark">SINGULARIS</span>
+        <span id="title-version" class="version-pill">Версия v2.4.0</span>
+      </div>
+      <nav class="mm-nav-tabs" aria-label="Меню">
+        <button type="button" id="btn-open-modules-title" class="mm-tab-btn">КАТАЛОГ МОДУЛЕЙ (100)</button>
+        <button type="button" id="btn-open-codex-title" class="mm-tab-btn" data-i18n="title.codex">КОДЕКС И УПРАВЛЕНИЕ</button>
+        <button type="button" id="btn-open-settings-title" class="mm-tab-btn" data-i18n="title.settings">НАСТРОЙКИ</button>
+      </nav>
+      <div class="lang-corner" role="group" aria-label="Language">
+        <button type="button" class="lang-btn" data-lang="en" aria-pressed="false" title="English">EN</button>
+        <button type="button" class="lang-btn active" data-lang="ru" aria-pressed="true" title="Русский">RU</button>
+        <button type="button" class="lang-btn" data-lang="uk" aria-pressed="false" title="Українська">UK</button>
+        <button type="button" class="lang-btn" data-lang="es" aria-pressed="false" title="Español">ES</button>
+      </div>
+    </header>
 
-    <div class="diff-section">
-      <div class="section-label">РЕЖИМ СЛОЖНОСТИ</div>
-      <div class="difficulty-row" role="group" aria-label="Сложность игры">
-        <button type="button" class="diff-btn" data-diff="easy" aria-pressed="false">
-          <span class="diff-name">КАДЕТ</span>
-          <span class="diff-meta">0.72× враги • +25% опыт</span>
-        </button>
-        <button type="button" class="diff-btn active" data-diff="normal" aria-pressed="true">
-          <span class="diff-name">АРХИТЕКТОР</span>
-          <span class="diff-meta">1.15× враги • стандарт</span>
-        </button>
-        <button type="button" class="diff-btn" data-diff="hard" aria-pressed="false">
-          <span class="diff-name">СИНГУЛЯРНОСТЬ</span>
-          <span class="diff-meta">1.60× враги • +50% очки</span>
-        </button>
-      </div>
-    </div>
+    <main class="mm-stage">
+      <section class="mm-left-col">
+        <div class="mm-hero">
+          <div class="modal-eyebrow" data-i18n="title.eyebrow">ТАКТИЧЕСКАЯ РЕЛЯТИВИСТСКАЯ ПЕСОЧНИЦА • ROGUELIKE</div>
+          <h1 id="title-heading" class="mm-title" data-i18n="title.heading">SINGULARIS: АРХИТЕКТОР ГРАВИТАЦИИ</h1>
+          <p class="mm-sub" data-i18n="title.sub">
+            Исследуйте мир вокруг вашей Базы, входите в пространственные Аномалии для зачистки данжей с боссами, собирайте модули и возвращайтесь в док ремонта.
+          </p>
+        </div>
 
-    <div class="diff-section">
-      <div class="section-label">ГРАФИКА И ПРОИЗВОДИТЕЛЬНОСТЬ</div>
-      <div class="quality-row" role="group" aria-label="Режим производительности">
-        <button type="button" class="qual-btn" data-quality="low" aria-pressed="false">
-          <span class="diff-name">СЛАБЫЙ ПК</span>
-          <span class="diff-meta">макс. FPS • без blur</span>
-        </button>
-        <button type="button" class="qual-btn active" data-quality="medium" aria-pressed="true">
-          <span class="diff-name">БАЛАНС</span>
-          <span class="diff-meta">GPU • оптимально</span>
-        </button>
-        <button type="button" class="qual-btn" data-quality="high" aria-pressed="false">
-          <span class="diff-name">МОЩНЫЙ ПК</span>
-          <span class="diff-meta">ультра • WebGL шейдеры</span>
-        </button>
-      </div>
-    </div>
+        <div class="mm-play-panel">
+          <button type="button" id="btn-continue-play" class="btn-primary mm-launch-hero" hidden>ПРОДОЛЖИТЬ</button>
+          <div id="title-save-meta" class="save-meta-line mm-save-meta" hidden></div>
+          <div class="mm-mode-row">
+            <button type="button" id="btn-start-play" class="btn-primary mm-mode-btn" autofocus data-i18n="title.openWorld">ОТКРЫТЫЙ МИР</button>
+            <button type="button" id="btn-start-endless" class="btn-endless mm-mode-btn" data-i18n="title.endless">∞ БЕСКОНЕЧНЫЙ МАХАЧ</button>
+          </div>
+        </div>
 
-    <nav class="menu-nav" aria-label="Главное меню">
-      <button type="button" id="btn-continue-play" class="btn-primary menu-btn menu-btn-wide" hidden>ПРОДОЛЖИТЬ</button>
-      <button type="button" id="btn-start-play" class="btn-primary menu-btn" autofocus>ОТКРЫТЫЙ МИР</button>
-      <button type="button" id="btn-start-endless" class="btn-endless menu-btn">∞ БЕСКОНЕЧНЫЙ МАХАЧ</button>
-      <button type="button" id="btn-open-settings-title" class="btn-ghost menu-btn">НАСТРОЙКИ</button>
-      <button type="button" id="btn-open-codex-title" class="btn-ghost menu-btn">КОДЕКС И УПРАВЛЕНИЕ</button>
-      <button type="button" id="btn-open-modules-title" class="btn-ghost menu-btn menu-btn-wide">КАТАЛОГ МОДУЛЕЙ (100)</button>
-    </nav>
-    <div id="title-save-meta" class="save-meta-line" hidden></div>
+        <div class="mm-diff-block">
+          <div class="section-label" data-i18n="title.diffLabel">РЕЖИМ СЛОЖНОСТИ</div>
+          <div class="difficulty-row mm-diff-row" role="group" aria-label="Сложность игры">
+            <button type="button" class="diff-btn" data-diff="easy" aria-pressed="false">
+              <span class="diff-name" data-i18n="title.diffEasyName">КАДЕТ</span>
+              <span class="diff-meta" data-i18n="title.diffEasyMeta">0.72× враги • +25% опыт</span>
+            </button>
+            <button type="button" class="diff-btn active" data-diff="normal" aria-pressed="true">
+              <span class="diff-name" data-i18n="title.diffNormalName">АРХИТЕКТОР</span>
+              <span class="diff-meta" data-i18n="title.diffNormalMeta">1.15× враги • стандарт</span>
+            </button>
+            <button type="button" class="diff-btn" data-diff="hard" aria-pressed="false">
+              <span class="diff-name" data-i18n="title.diffHardName">СИНГУЛЯРНОСТЬ</span>
+              <span class="diff-meta" data-i18n="title.diffHardMeta">1.60× враги • +50% очки</span>
+            </button>
+          </div>
+        </div>
+      </section>
 
-    <div class="controls-grid compact-controls">
-      <div class="ctrl-card">
-        <span class="ctrl-key">WASD + [Shift]</span>
-        <p>Маневры и фазовый рывок с неуязвимостью.</p>
-      </div>
-      <div class="ctrl-card">
-        <span class="ctrl-key">ЛКМ + ПКМ + [R]</span>
-        <p>Плазменный огонь и черные/белые дыры.</p>
-      </div>
-      <div class="ctrl-card">
-        <span class="ctrl-key">SPACE + [Q] + [E]</span>
-        <p>Bullet-Time, откат на 3с и взрыв дыр.</p>
-      </div>
-      <div class="ctrl-card">
-        <span class="ctrl-key">[B] + [H] + [Esc]</span>
-        <p>Каталог 100 модулей, кодекс и пауза.</p>
-      </div>
-    </div>
+      <aside class="mm-right-dock">
+        <div class="mm-profile-card">
+          <div class="mm-card-head">
+            <span class="mm-status-dot" aria-hidden="true"></span>
+            <span class="mm-card-title" data-i18n="title.pilotRecord">ДОСЬЕ ПИЛОТА</span>
+          </div>
+          <div class="mm-stats-row">
+            <div class="mm-stat">
+              <span id="title-stat-score" class="mm-stat-val">0</span>
+              <span class="mm-stat-lbl" data-i18n="title.statScore">РЕКОРД</span>
+            </div>
+            <div class="mm-stat">
+              <span id="title-stat-wave" class="mm-stat-val">1</span>
+              <span class="mm-stat-lbl" data-i18n="title.statWave">МАКС. ВОЛНА</span>
+            </div>
+            <div class="mm-stat">
+              <span id="title-stat-kills" class="mm-stat-val">0</span>
+              <span class="mm-stat-lbl" data-i18n="title.statKills">УНИЧТОЖЕНО</span>
+            </div>
+          </div>
+          <div id="title-best-record" class="mm-record-sub"></div>
+        </div>
 
-    <div class="title-footer">
-      <div id="title-best-record" class="record-line"></div>
-      <span id="title-version" class="version-pill">Версия v2.3.0</span>
-    </div>
+        <div class="mm-perf-bar">
+          <span class="mm-perf-label" data-i18n="title.perfShort">ГРАФИКА</span>
+          <div class="quality-row mm-qual-seg" role="group" aria-label="Режим производительности">
+            <button type="button" class="qual-btn" data-quality="low" aria-pressed="false">
+              <span class="diff-name" data-i18n="title.qualLowName">СЛАБЫЙ ПК</span>
+            </button>
+            <button type="button" class="qual-btn active" data-quality="medium" aria-pressed="true">
+              <span class="diff-name" data-i18n="title.qualMedName">БАЛАНС</span>
+            </button>
+            <button type="button" class="qual-btn" data-quality="high" aria-pressed="false">
+              <span class="diff-name" data-i18n="title.qualHighName">МОЩНЫЙ ПК</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="mm-bottombar">
+      <div class="mm-keybar">
+        <span><kbd>WASD</kbd> + <kbd>Shift</kbd></span>
+        <span class="mm-sep">•</span>
+        <span><kbd>LMB</kbd> / <kbd>RMB</kbd> + <kbd>R</kbd></span>
+        <span class="mm-sep">•</span>
+        <span><kbd>Space</kbd> + <kbd>Q</kbd> + <kbd>E</kbd></span>
+        <span class="mm-sep">•</span>
+        <span><kbd>Tab</kbd> + <kbd>B</kbd> + <kbd>H</kbd></span>
+      </div>
+      <div id="title-sys-status" class="mm-sys-status">● QUANTUM CORE ONLINE</div>
+    </footer>
   </dialog>
 
   <!-- In-Game Pause Menu Modal -->
   <dialog id="pause-dialog" aria-labelledby="pause-heading">
-    <div class="modal-eyebrow">ПАУЗА • КВАНТОВЫЙ СТАЗИС</div>
-    <h2 id="pause-heading" class="modal-title" style="font-size:30px">Меню паузы</h2>
+    <div class="modal-eyebrow" data-i18n="pause.eyebrow">ПАУЗА • КВАНТОВЫЙ СТАЗИС</div>
+    <h2 id="pause-heading" class="modal-title" style="font-size:30px" data-i18n="pause.heading">Меню паузы</h2>
     <div id="pause-summary" class="pause-meta"></div>
     <div id="pause-upgrades" class="upgrade-pills"></div>
 
     <div class="menu-stack">
-      <button type="button" id="btn-pause-resume" class="btn-primary" autofocus>ПРОДОЛЖИТЬ [Esc]</button>
-      <button type="button" id="btn-pause-restart" class="btn-secondary">НАЧАТЬ ЗАНОВО</button>
-      <button type="button" id="btn-pause-settings" class="btn-ghost">НАСТРОЙКИ</button>
-      <button type="button" id="btn-pause-modules" class="btn-ghost">КАТАЛОГ МОДУЛЕЙ [B]</button>
-      <button type="button" id="btn-pause-codex" class="btn-ghost">КОДЕКС</button>
-      <button type="button" id="btn-pause-mainmenu" class="btn-ghost">В ГЛАВНОЕ МЕНЮ</button>
+      <button type="button" id="btn-pause-resume" class="btn-primary" autofocus data-i18n="pause.resume">ПРОДОЛЖИТЬ [Esc]</button>
+      <button type="button" id="btn-pause-restart" class="btn-secondary" data-i18n="pause.restart">НАЧАТЬ ЗАНОВО</button>
+      <button type="button" id="btn-pause-settings" class="btn-ghost" data-i18n="pause.settings">НАСТРОЙКИ</button>
+      <button type="button" id="btn-pause-modules" class="btn-ghost" data-i18n="pause.modules">КАТАЛОГ МОДУЛЕЙ [B]</button>
+      <button type="button" id="btn-pause-codex" class="btn-ghost" data-i18n="pause.codex">КОДЕКС</button>
+      <button type="button" id="btn-pause-mainmenu" class="btn-ghost" data-i18n="pause.mainmenu">В ГЛАВНОЕ МЕНЮ</button>
     </div>
   </dialog>
 
   <!-- Settings Modal -->
   <dialog id="settings-dialog" aria-labelledby="settings-heading">
-    <div class="modal-eyebrow">КОНФИГУРАЦИЯ ЯДРА</div>
-    <h2 id="settings-heading" class="modal-title" style="font-size:28px">Настройки</h2>
-    <p class="modal-sub">Изменения применяются мгновенно и сохраняются автоматически.</p>
+    <div class="modal-eyebrow" data-i18n="set.eyebrow">КОНФИГУРАЦИЯ ЯДРА</div>
+    <h2 id="settings-heading" class="modal-title" style="font-size:28px" data-i18n="set.heading">Настройки</h2>
+    <p class="modal-sub" data-i18n="set.sub">Изменения применяются мгновенно и сохраняются автоматически.</p>
 
     <div class="settings-list">
+      <label class="setting-row" for="set-lang">
+        <div class="setting-info">
+          <span class="setting-title" data-i18n="set.langTitle">Язык интерфейса</span>
+          <span class="setting-desc" data-i18n="set.langDesc">English / Русский / Українська / Español — применяется мгновенно</span>
+        </div>
+        <div class="setting-control">
+          <select id="set-lang" class="setting-select">
+            <option value="en">English</option>
+            <option value="ru" selected>Русский</option>
+            <option value="uk">Українська</option>
+            <option value="es">Español</option>
+          </select>
+        </div>
+      </label>
+
       <label class="setting-row" for="set-quality">
         <div class="setting-info">
-          <span class="setting-title">Режим графики</span>
-          <span class="setting-desc">Слабый ПК (макс. FPS) / Мощный ПК (ультра частицы и сетка)</span>
+          <span class="setting-title" data-i18n="set.qualTitle">Режим графики</span>
+          <span class="setting-desc" data-i18n="set.qualDesc">Слабый ПК (макс. FPS) / Мощный ПК (ультра частицы и сетка)</span>
         </div>
         <div class="setting-control">
           <select id="set-quality" class="setting-select">
-            <option value="low">Слабый ПК</option>
-            <option value="medium" selected>Баланс</option>
-            <option value="high">Мощный ПК</option>
+            <option value="low" data-i18n="set.qualLow">Слабый ПК</option>
+            <option value="medium" selected data-i18n="set.qualMed">Баланс</option>
+            <option value="high" data-i18n="set.qualHigh">Мощный ПК</option>
           </select>
         </div>
       </label>
 
       <label class="setting-row" for="set-gpu">
         <div class="setting-info">
-          <span class="setting-title">Аппаратное ускорение GPU</span>
-          <span class="setting-desc">WebGL шейдеры для сетки, туманности и частиц (<span id="gpu-backend-label">проверка...</span>)</span>
+          <span class="setting-title" data-i18n="set.gpuTitle">Аппаратное ускорение GPU</span>
+          <span class="setting-desc" data-i18n-html="set.gpuDesc">WebGL шейдеры для сетки, туманности и частиц (<span id="gpu-backend-label">проверка...</span>)</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-gpu" checked>
@@ -252,8 +301,8 @@
 
       <label class="setting-row" for="set-textures">
         <div class="setting-info">
-          <span class="setting-title">Текстуры (стиль Mindustry)</span>
-          <span class="setting-desc">Детализированные спрайты кораблей, врагов и сектора арены</span>
+          <span class="setting-title" data-i18n="set.texTitle">Текстуры (стиль Mindustry)</span>
+          <span class="setting-desc" data-i18n="set.texDesc">Детализированные спрайты кораблей, врагов и сектора арены</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-textures" checked>
@@ -262,8 +311,8 @@
 
       <label class="setting-row" for="set-fps">
         <div class="setting-info">
-          <span class="setting-title">Счетчик FPS и GPU</span>
-          <span class="setting-desc">Показывать нагрузку и бэкенд рендера в левом нижнем углу</span>
+          <span class="setting-title" data-i18n="set.fpsTitle">Счетчик FPS и GPU</span>
+          <span class="setting-desc" data-i18n="set.fpsDesc">Показывать нагрузку и бэкенд рендера в левом нижнем углу</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-fps" checked>
@@ -272,8 +321,8 @@
 
       <label class="setting-row" for="set-music-vol">
         <div class="setting-info">
-          <span class="setting-title">Громкость музыки</span>
-          <span class="setting-desc">Процедурный адаптивный синтезатор</span>
+          <span class="setting-title" data-i18n="set.musicTitle">Громкость музыки</span>
+          <span class="setting-desc" data-i18n="set.musicDesc">Процедурный адаптивный синтезатор</span>
         </div>
         <div class="setting-control">
           <input type="range" id="set-music-vol" min="0" max="100" value="60">
@@ -283,8 +332,8 @@
 
       <label class="setting-row" for="set-sfx-vol">
         <div class="setting-info">
-          <span class="setting-title">Громкость эффектов (SFX)</span>
-          <span class="setting-desc">Выстрелы, пращи, взрывы, перемотка времени</span>
+          <span class="setting-title" data-i18n="set.sfxTitle">Громкость эффектов (SFX)</span>
+          <span class="setting-desc" data-i18n="set.sfxDesc">Выстрелы, пращи, взрывы, перемотка времени</span>
         </div>
         <div class="setting-control">
           <input type="range" id="set-sfx-vol" min="0" max="100" value="85">
@@ -294,8 +343,8 @@
 
       <label class="setting-row" for="set-shake">
         <div class="setting-info">
-          <span class="setting-title">Тряска камеры</span>
-          <span class="setting-desc">Динамическая отдача при взрывах и попаданиях</span>
+          <span class="setting-title" data-i18n="set.shakeTitle">Тряска камеры</span>
+          <span class="setting-desc" data-i18n="set.shakeDesc">Динамическая отдача при взрывах и попаданиях</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-shake" checked>
@@ -304,8 +353,8 @@
 
       <label class="setting-row" for="set-trajectory">
         <div class="setting-info">
-          <span class="setting-title">Предпросмотр грави-дуги</span>
-          <span class="setting-desc">Пунктирная линия искривления прицела возле черных дыр</span>
+          <span class="setting-title" data-i18n="set.trajTitle">Предпросмотр грави-дуги</span>
+          <span class="setting-desc" data-i18n="set.trajDesc">Пунктирная линия искривления прицела возле черных дыр</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-trajectory" checked>
@@ -314,22 +363,22 @@
 
       <label class="setting-row" for="set-touch-mode">
         <div class="setting-info">
-          <span class="setting-title">Сенсорное управление</span>
-          <span class="setting-desc">Экранные стики и кнопки для телефона и планшета</span>
+          <span class="setting-title" data-i18n="set.touchModeTitle">Сенсорное управление</span>
+          <span class="setting-desc" data-i18n="set.touchModeDesc">Экранные стики и кнопки для телефона и планшета</span>
         </div>
         <div class="setting-control">
           <select id="set-touch-mode" class="setting-select">
-            <option value="auto" selected>Авто</option>
-            <option value="on">Всегда вкл</option>
-            <option value="off">Выкл</option>
+            <option value="auto" selected data-i18n="set.touchAuto">Авто</option>
+            <option value="on" data-i18n="set.touchOn">Всегда вкл</option>
+            <option value="off" data-i18n="set.touchOff">Выкл</option>
           </select>
         </div>
       </label>
 
       <label class="setting-row" for="set-touch-floating">
         <div class="setting-info">
-          <span class="setting-title">Плавающий джойстик</span>
-          <span class="setting-desc">Левый стик появляется там, где коснулся палец</span>
+          <span class="setting-title" data-i18n="set.touchFloatTitle">Плавающий джойстик</span>
+          <span class="setting-desc" data-i18n="set.touchFloatDesc">Левый стик появляется там, где коснулся палец</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-touch-floating" checked>
@@ -338,8 +387,8 @@
 
       <label class="setting-row" for="set-touch-autofire">
         <div class="setting-info">
-          <span class="setting-title">Авто-стрельба (сенсор)</span>
-          <span class="setting-desc">Автоматический огонь по направлению прицела при наличии врагов</span>
+          <span class="setting-title" data-i18n="set.touchAutoFireTitle">Авто-стрельба (сенсор)</span>
+          <span class="setting-desc" data-i18n="set.touchAutoFireDesc">Автоматический огонь по направлению прицела при наличии врагов</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-touch-autofire">
@@ -348,8 +397,8 @@
 
       <label class="setting-row" for="set-touch-canvas-well">
         <div class="setting-info">
-          <span class="setting-title">Тап по полю = Дыра</span>
-          <span class="setting-desc">Нажатие или перетягивание по арене ставит гравитационную дыру</span>
+          <span class="setting-title" data-i18n="set.touchWellTitle">Тап по полю = Дыра</span>
+          <span class="setting-desc" data-i18n="set.touchWellDesc">Нажатие или перетягивание по арене ставит гравитационную дыру</span>
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-touch-canvas-well" checked>
@@ -358,8 +407,8 @@
 
       <label class="setting-row" for="set-touch-scale">
         <div class="setting-info">
-          <span class="setting-title">Размер кнопок (телефон)</span>
-          <span class="setting-desc">Масштаб сенсорных кнопок и джойстиков на экране</span>
+          <span class="setting-title" data-i18n="set.touchScaleTitle">Размер кнопок (телефон)</span>
+          <span class="setting-desc" data-i18n="set.touchScaleDesc">Масштаб сенсорных кнопок и джойстиков на экране</span>
         </div>
         <div class="setting-control">
           <input type="range" id="set-touch-scale" min="75" max="150" step="5" value="100">
@@ -369,8 +418,8 @@
 
       <label class="setting-row" for="set-touch-opacity">
         <div class="setting-info">
-          <span class="setting-title">Прозрачность кнопок (телефон)</span>
-          <span class="setting-desc">Видимость сенсорного управления поверх поля боя</span>
+          <span class="setting-title" data-i18n="set.touchOpacityTitle">Прозрачность кнопок (телефон)</span>
+          <span class="setting-desc" data-i18n="set.touchOpacityDesc">Видимость сенсорного управления поверх поля боя</span>
         </div>
         <div class="setting-control">
           <input type="range" id="set-touch-opacity" min="30" max="100" step="5" value="80">
@@ -380,27 +429,27 @@
 
       <div class="setting-row">
         <div class="setting-info">
-          <span class="setting-title">Сквозь-патчевое сохранение</span>
-          <span class="setting-desc" id="save-io-status">Прогресс переносится между обновлениями. Экспорт или импорт кода.</span>
+          <span class="setting-title" data-i18n="set.saveTitle">Сквозь-патчевое сохранение</span>
+          <span class="setting-desc" id="save-io-status" data-i18n="set.saveDesc">Прогресс переносится между обновлениями. Экспорт или импорт кода.</span>
         </div>
         <div class="setting-control setting-btn-group">
-          <button type="button" id="btn-export-save" class="hud-btn">Экспорт</button>
-          <button type="button" id="btn-import-save" class="hud-btn">Импорт</button>
+          <button type="button" id="btn-export-save" class="hud-btn" data-i18n="set.export">Экспорт</button>
+          <button type="button" id="btn-import-save" class="hud-btn" data-i18n="set.import">Импорт</button>
         </div>
       </div>
     </div>
 
     <div class="cta-row settings-footer">
-      <button type="button" id="btn-close-settings" class="btn-primary" autofocus>ГОТОВО</button>
-      <button type="button" id="btn-reset-records" class="btn-ghost btn-danger">Сбросить рекорды</button>
+      <button type="button" id="btn-close-settings" class="btn-primary" autofocus data-i18n="set.done">ГОТОВО</button>
+      <button type="button" id="btn-reset-records" class="btn-ghost btn-danger" data-i18n="set.resetRecords">Сбросить рекорды</button>
     </div>
   </dialog>
 
   <!-- Roguelike Quantum Augmentation Modal -->
   <dialog id="upgrade-dialog" aria-labelledby="upg-heading">
-    <div class="modal-eyebrow">КВАНТОВАЯ ЭВОЛЮЦИЯ ЯДРА</div>
-    <h2 id="upg-heading" class="modal-title" style="font-size:28px">Выберите модуль сингулярности</h2>
-    <p class="modal-sub">Нажмите на карточку или клавиши <strong>[1]</strong>–<strong>[4]</strong>. На максимальном уровне модуль пробуждает уникальную Апекс-Эволюцию.</p>
+    <div class="modal-eyebrow" data-i18n="upg.eyebrow">КВАНТОВАЯ ЭВОЛЮЦИЯ ЯДРА</div>
+    <h2 id="upg-heading" class="modal-title" style="font-size:28px" data-i18n="upg.heading">Выберите модуль сингулярности</h2>
+    <p class="modal-sub" data-i18n-html="upg.sub">Нажмите на карточку или клавиши <strong>[1]</strong>–<strong>[4]</strong>. На максимальном уровне модуль пробуждает уникальную Апекс-Эволюцию.</p>
     <div id="upgrade-stats-bar" class="upgrade-stats-bar"></div>
     <div id="upgrade-cards" class="upgrade-grid"></div>
     <div class="cta-row upgrade-footer">
@@ -410,62 +459,62 @@
 
   <!-- Physics & Enemy Codex Modal -->
   <dialog id="codex-dialog" aria-labelledby="codex-heading">
-    <div class="modal-eyebrow">ТАКТИЧЕСКИЙ СПРАВОЧНИК</div>
-    <h2 id="codex-heading" class="modal-title" style="font-size:28px">Законы Гравитационной Арены</h2>
+    <div class="modal-eyebrow" data-i18n="codex.eyebrow">ТАКТИЧЕСКИЙ СПРАВОЧНИК</div>
+    <h2 id="codex-heading" class="modal-title" style="font-size:28px" data-i18n="codex.heading">Законы Гравитационной Арены</h2>
     <div class="controls-grid">
       <div class="ctrl-card">
-        <span class="ctrl-key">Орбитальная Праща</span>
-        <p>Пропустите свой выстрел по касательной к внутреннему кольцу Черной дыры — он ускорится, станет фиолетовым, пробьет цели насквозь и нанесет 2.2× урона!</p>
+        <span class="ctrl-key" data-i18n="codex.c1k">Орбитальная Праща</span>
+        <p data-i18n="codex.c1p">Пропустите свой выстрел по касательной к внутреннему кольцу Черной дыры — он ускорится, станет фиолетовым, пробьет цели насквозь и нанесет 2.2× урона!</p>
       </div>
       <div class="ctrl-card">
-        <span class="ctrl-key">Захват Импульса</span>
-        <p>Вражеские пули, искривленные вашей сингулярностью на >25°, окрашиваются в золотой цвет и бьют самих врагов, заряжая ваш щит.</p>
+        <span class="ctrl-key" data-i18n="codex.c2k">Захват Импульса</span>
+        <p data-i18n="codex.c2p">Вражеские пули, искривленные вашей сингулярностью на >25°, окрашиваются в золотой цвет и бьют самих врагов, заряжая ваш щит.</p>
       </div>
       <div class="ctrl-card">
-        <span class="ctrl-key">Обход Щита «Эгиды»</span>
-        <p>Штурмовики «Эгида» отражают лобовой огонь. Поставьте черную дыру у них за спиной — и ваши пули сами обогнут щит по дуге!</p>
+        <span class="ctrl-key" data-i18n="codex.c3k">Обход Щита «Эгиды»</span>
+        <p data-i18n="codex.c3p">Штурмовики «Эгида» отражают лобовой огонь. Поставьте черную дыру у них за спиной — и ваши пули сами обогнут щит по дуге!</p>
       </div>
       <div class="ctrl-card">
-        <span class="ctrl-key">Аннигиляция и [E]</span>
-        <p>Сталкивайте врагов лбами внутри воронки для взаимной аннигиляции или нажимайте <strong>[E]</strong> для принудительного взрыва Сверхновой.</p>
+        <span class="ctrl-key" data-i18n="codex.c4k">Аннигиляция и [E]</span>
+        <p data-i18n-html="codex.c4p">Сталкивайте врагов лбами внутри воронки для взаимной аннигиляции или нажимайте <strong>[E]</strong> для принудительного взрыва Сверхновой.</p>
       </div>
       <div class="ctrl-card">
-        <span class="ctrl-key">Белая дыра [R]</span>
-        <p>Клавиша <strong>[R]</strong> (или Shift+ПКМ) переключает гравитацию на отталкивающую Белую дыру — идеальный щит от роя и пулевого шторма.</p>
+        <span class="ctrl-key" data-i18n="codex.c5k">Белая дыра [R]</span>
+        <p data-i18n-html="codex.c5p">Клавиша <strong>[R]</strong> (или Shift+ПКМ) переключает гравитацию на отталкивающую Белую дыру — идеальный щит от роя и пулевого шторма.</p>
       </div>
       <div class="ctrl-card">
-        <span class="ctrl-key">Боссы каждые 5 волн</span>
-        <p>На 5-й волне пробуждается многосегментный <strong>Кронос-Левиафан</strong>, а на 10-й — бинарная система <strong>Архонт Пустоты</strong>.</p>
+        <span class="ctrl-key" data-i18n="codex.c6k">Боссы каждые 5 волн</span>
+        <p data-i18n-html="codex.c6p">На 5-й волне пробуждается многосегментный <strong>Кронос-Левиафан</strong>, а на 10-й — бинарная система <strong>Архонт Пустоты</strong>.</p>
       </div>
     </div>
     <div class="cta-row">
-      <button type="button" id="btn-close-codex" class="btn-primary" autofocus>Вернуться</button>
+      <button type="button" id="btn-close-codex" class="btn-primary" autofocus data-i18n="codex.back">Вернуться</button>
     </div>
   </dialog>
 
   <!-- Full Modules Catalog Modal -->
   <dialog id="modules-dialog" aria-labelledby="modules-heading">
-    <div class="modal-eyebrow">РЕЕСТР КВАНТОВЫХ АУГМЕНТАЦИЙ</div>
-    <h2 id="modules-heading" class="modal-title" style="font-size:28px">Каталог модулей</h2>
-    <p id="modules-count-sub" class="modal-sub">Все 100 модулей ядра. В бою из них случайно выпадают по 4 варианта при повышении уровня.</p>
+    <div class="modal-eyebrow" data-i18n="mod.eyebrow">РЕЕСТР КВАНТОВЫХ АУГМЕНТАЦИЙ</div>
+    <h2 id="modules-heading" class="modal-title" style="font-size:28px" data-i18n="mod.heading">Каталог модулей</h2>
+    <p id="modules-count-sub" class="modal-sub" data-i18n="mod.sub">Все 100 модулей ядра. В бою из них случайно выпадают по 4 варианта при повышении уровня.</p>
 
     <div class="catalog-search-row">
-      <input type="search" id="modules-search" class="catalog-search-input" placeholder="Поиск модуля по названию, тегу или эффекту..." autocomplete="off">
+      <input type="search" id="modules-search" class="catalog-search-input" placeholder="Поиск модуля по названию, тегу или эффекту..." data-i18n-placeholder="mod.searchPlaceholder" autocomplete="off">
     </div>
 
     <div class="catalog-filters" role="group" aria-label="Фильтр модулей">
-      <button type="button" class="cat-btn active" data-cat="all" aria-pressed="true">ВСЕ</button>
-      <button type="button" class="cat-btn" data-cat="aura" aria-pressed="false">АУРЫ</button>
-      <button type="button" class="cat-btn" data-cat="tank" aria-pressed="false">ТАНК И ЗАЩИТА</button>
-      <button type="button" class="cat-btn" data-cat="orbit" aria-pressed="false">ОРБИТА И ДЫРЫ</button>
-      <button type="button" class="cat-btn" data-cat="weapon" aria-pressed="false">ОРУДИЕ</button>
-      <button type="button" class="cat-btn" data-cat="chrono" aria-pressed="false">ХРОНО И СИНЕРГИЯ</button>
+      <button type="button" class="cat-btn active" data-cat="all" aria-pressed="true" data-i18n="mod.catAll">ВСЕ</button>
+      <button type="button" class="cat-btn" data-cat="aura" aria-pressed="false" data-i18n="mod.catAura">АУРЫ</button>
+      <button type="button" class="cat-btn" data-cat="tank" aria-pressed="false" data-i18n="mod.catTank">ТАНК И ЗАЩИТА</button>
+      <button type="button" class="cat-btn" data-cat="orbit" aria-pressed="false" data-i18n="mod.catOrbit">ОРБИТА И ДЫРЫ</button>
+      <button type="button" class="cat-btn" data-cat="weapon" aria-pressed="false" data-i18n="mod.catWeapon">ОРУДИЕ</button>
+      <button type="button" class="cat-btn" data-cat="chrono" aria-pressed="false" data-i18n="mod.catChrono">ХРОНО И СИНЕРГИЯ</button>
     </div>
 
     <div id="modules-catalog-grid" class="catalog-grid"></div>
 
     <div class="cta-row">
-      <button type="button" id="btn-close-modules" class="btn-primary" autofocus>Вернуться</button>
+      <button type="button" id="btn-close-modules" class="btn-primary" autofocus data-i18n="mod.back">Вернуться</button>
     </div>
   </dialog>
 
@@ -473,61 +522,62 @@
   <dialog id="worldmap-dialog" aria-labelledby="worldmap-heading">
     <div class="worldmap-head">
       <div>
-        <div class="modal-eyebrow">НАВИГАЦИЯ СЕКТОРА • OPEN WORLD</div>
-        <h2 id="worldmap-heading" class="modal-title" style="font-size:20px;margin:0">ТАКТИЧЕСКАЯ КАРТА СЕКТОРА • 24×24 КМ</h2>
+        <div class="modal-eyebrow" data-i18n="wm.eyebrow">НАВИГАЦИЯ СЕКТОРА • OPEN WORLD</div>
+        <h2 id="worldmap-heading" class="modal-title" style="font-size:20px;margin:0" data-i18n="wm.heading">ТАКТИЧЕСКАЯ КАРТА СЕКТОРА • 24×24 КМ</h2>
       </div>
       <div class="worldmap-actions">
-        <button type="button" id="btn-worldmap-clear-wp" class="hud-btn">Сбросить маяк</button>
-        <button type="button" id="btn-worldmap-base" class="hud-btn">На базу <span class="key-hint">[T]</span></button>
-        <button type="button" id="btn-close-worldmap" class="btn-primary" style="padding:7px 14px;font-size:12px">Закрыть [Tab]</button>
+        <button type="button" id="btn-worldmap-clear-wp" class="hud-btn" data-i18n="wm.clearWp">Сбросить маяк</button>
+        <button type="button" id="btn-worldmap-base" class="hud-btn" data-i18n-html="wm.toBase">На базу <span class="key-hint">[T]</span></button>
+        <button type="button" id="btn-close-worldmap" class="btn-primary" style="padding:7px 14px;font-size:12px" data-i18n="wm.close">Закрыть [Tab]</button>
       </div>
     </div>
     <div class="worldmap-stage">
       <canvas id="worldmap-canvas"></canvas>
     </div>
     <div class="worldmap-foot">
-      <span id="worldmap-info">Клик по карте — поставить GPS-маяк • Клик по аномалии — захват цели</span>
+      <span id="worldmap-info" data-i18n="wm.hint">Клик по карте — поставить GPS-маяк • Клик по аномалии — захват цели</span>
       <div class="wm-legend">
-        <span><i class="wm-dot" style="background:#00f0ff"></i>БАЗА</span>
+        <span><i class="wm-dot" style="background:#00f0ff"></i><span data-i18n="wm.legBase">БАЗА</span></span>
         <span><i class="wm-dot" style="background:#c06cff"></i>T1–T5</span>
-        <span><i class="wm-dot" style="background:#ffd166"></i>МАЯК</span>
-        <span><i class="wm-dot" style="background:#22ffa6"></i>ЗАЧИЩЕНО</span>
+        <span><i class="wm-dot" style="background:#ffd166"></i><span data-i18n="wm.legWp">МАЯК</span></span>
+        <span><i class="wm-dot" style="background:#22ffa6"></i><span data-i18n="wm.legCleared">ЗАЧИЩЕНО</span></span>
       </div>
     </div>
   </dialog>
 
   <!-- Game Over Summary Modal -->
   <dialog id="gameover-dialog" aria-labelledby="go-heading">
-    <div class="modal-eyebrow">КВАНТОВЫЙ КОЛЛАПС КОРПУСА</div>
-    <h2 id="go-heading" class="modal-title" style="font-size:32px">Миссия завершена</h2>
-    <div id="go-record-badge" class="record-celebration" hidden>НОВЫЙ АБСОЛЮТНЫЙ РЕКОРД!</div>
+    <div class="modal-eyebrow" data-i18n="go.eyebrow">КВАНТОВЫЙ КОЛЛАПС КОРПУСА</div>
+    <h2 id="go-heading" class="modal-title" style="font-size:32px" data-i18n="go.heading">Миссия завершена</h2>
+    <div id="go-record-badge" class="record-celebration" hidden data-i18n="go.recordBadge">НОВЫЙ АБСОЛЮТНЫЙ РЕКОРД!</div>
     <div class="stats-grid">
-      <div class="stat-box"><div id="go-score" class="val">0</div><div class="lbl">Итоговый счет</div></div>
-      <div class="stat-box"><div id="go-best" class="val">0</div><div class="lbl">Лучший рекорд</div></div>
-      <div class="stat-box"><div id="go-wave" class="val">1</div><div class="lbl">Аномалий / Волна</div></div>
-      <div class="stat-box"><div id="go-kills" class="val">0</div><div class="lbl">Уничтожено целей</div></div>
-      <div class="stat-box"><div id="go-max-combo" class="val">×1.0</div><div class="lbl">Макс. резонанс</div></div>
-      <div class="stat-box"><div id="go-evolutions" class="val">0</div><div class="lbl">Апекс-эволюций</div></div>
-      <div class="stat-box"><div id="go-slingshots" class="val">0</div><div class="lbl">Орбитальных пращей</div></div>
-      <div class="stat-box"><div id="go-hijacks" class="val">0</div><div class="lbl">Перехватов пуль</div></div>
+      <div class="stat-box"><div id="go-score" class="val">0</div><div class="lbl" data-i18n="go.lblScore">Итоговый счет</div></div>
+      <div class="stat-box"><div id="go-best" class="val">0</div><div class="lbl" data-i18n="go.lblBest">Лучший рекорд</div></div>
+      <div class="stat-box"><div id="go-wave" class="val">1</div><div class="lbl" data-i18n="go.lblWave">Аномалий / Волна</div></div>
+      <div class="stat-box"><div id="go-kills" class="val">0</div><div class="lbl" data-i18n="go.lblKills">Уничтожено целей</div></div>
+      <div class="stat-box"><div id="go-max-combo" class="val">×1.0</div><div class="lbl" data-i18n="go.lblCombo">Макс. резонанс</div></div>
+      <div class="stat-box"><div id="go-evolutions" class="val">0</div><div class="lbl" data-i18n="go.lblEvolutions">Апекс-эволюций</div></div>
+      <div class="stat-box"><div id="go-slingshots" class="val">0</div><div class="lbl" data-i18n="go.lblSlingshots">Орбитальных пращей</div></div>
+      <div class="stat-box"><div id="go-hijacks" class="val">0</div><div class="lbl" data-i18n="go.lblHijacks">Перехватов пуль</div></div>
     </div>
     <div id="go-build-section" class="go-build-section">
-      <div class="section-label">СОБРАННАЯ КОНФИГУРАЦИЯ ЯДРА</div>
+      <div class="section-label" data-i18n="go.buildLabel">СОБРАННАЯ КОНФИГУРАЦИЯ ЯДРА</div>
       <div id="go-build-list" class="upgrade-pills"></div>
     </div>
     <div class="cta-row">
-      <button type="button" id="btn-restart" class="btn-primary" autofocus>НОВЫЙ ЗАПУСК</button>
-      <button type="button" id="btn-go-mainmenu" class="btn-ghost">ГЛАВНОЕ МЕНЮ</button>
+      <button type="button" id="btn-restart" class="btn-primary" autofocus data-i18n="go.restart">НОВЫЙ ЗАПУСК</button>
+      <button type="button" id="btn-go-mainmenu" class="btn-ghost" data-i18n="go.mainmenu">ГЛАВНОЕ МЕНЮ</button>
     </div>
   </dialog>
 
-  <script src="js/physics.js?v=2.3.0"></script>
-  <script src="js/sprites.js?v=2.3.0"></script>
-  <script src="js/gpu.js?v=2.3.0"></script>
-  <script src="js/audio.js?v=2.3.0"></script>
-  <script src="js/upgrades.js?v=2.3.0"></script>
-  <script src="js/entities.js?v=2.3.0"></script>
-  <script src="js/save.js?v=2.3.0"></script>
-  <script src="js/game.js?v=2.3.0"></script>
+  <script src="js/i18n.js?v=2.4.0"></script>
+  <script src="js/physics.js?v=2.4.0"></script>
+  <script src="js/sprites.js?v=2.4.0"></script>
+  <script src="js/gpu.js?v=2.4.0"></script>
+  <script src="js/audio.js?v=2.4.0"></script>
+  <script src="js/upgrades.js?v=2.4.0"></script>
+  <script src="js/entities.js?v=2.4.0"></script>
+  <script src="js/save.js?v=2.4.0"></script>
+  <script src="js/game.js?v=2.4.0"></script>
 </body>
 </html>

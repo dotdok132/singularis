@@ -4,6 +4,8 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
+  const tr = (k, v, fb) => (SG.I18n ? SG.I18n.t(k, v) : fb);
+
   class GravityWell {
     constructor(x, y, isRepulsor = false, mods = {}) {
       this.x = x;
@@ -268,7 +270,7 @@ window.SG = window.SG || {};
           for (let ei = game.enemies.length - 1; ei >= 0; ei--) {
             const en = game.enemies[ei];
             if (!en.dead && Math.hypot(en.x - pt.x, en.y - pt.y) <= blastR + en.radius) {
-              game.damageEnemy(en, blastDmg, '#7df9ff', 'ПАРАДОКС!');
+              game.damageEnemy(en, blastDmg, '#7df9ff', tr('ent.paradox', null, 'ПАРАДОКС!'));
             }
           }
         }
@@ -276,7 +278,7 @@ window.SG = window.SG || {};
 
       particles.addShockwave(this.x, this.y, 175, '#00f0ff', 0.45, 3.5);
       particles.burst(this.x, this.y, 32, '#00f0ff', 90, 320, 0.6, true);
-      particles.addText(this.x, this.y - 26, 'ПЕРЕМОТКА ВРЕМЕНИ!', '#7df9ff', 1.18, 1.2);
+      particles.addText(this.x, this.y - 26, tr('ent.rewind', null, 'ПЕРЕМОТКА ВРЕМЕНИ!'), '#7df9ff', 1.18, 1.2);
       grid.applyRadialForce(this.x, this.y, 950, 210, 188);
       audio.playRewind();
       return true;
@@ -334,7 +336,7 @@ window.SG = window.SG || {};
           if (!e.dead && Math.hypot(e.x - this.x, e.y - this.y) <= this.radius + e.radius + 26) {
             e.vx += dx * 480;
             e.vy += dy * 480;
-            game.damageEnemy(e, ramDmg, '#22ffa6', 'ФАЗОВЫЙ ТАРАН!');
+            game.damageEnemy(e, ramDmg, '#22ffa6', tr('ent.phaseRam', null, 'ФАЗОВЫЙ ТАРАН!'));
           }
         }
       }
@@ -348,7 +350,7 @@ window.SG = window.SG || {};
       if (this.mods.dodgeChance > 0 && Math.random() < this.mods.dodgeChance) {
         this.invulnTimer = 0.25;
         particles.burst(this.x, this.y, 10, '#7df9ff', 50, 180, 0.3);
-        particles.addText(this.x, this.y - 22, 'УКЛОНЕНИЕ!', '#7df9ff', 0.95);
+        particles.addText(this.x, this.y - 22, tr('ent.dodge', null, 'УКЛОНЕНИЕ!'), '#7df9ff', 0.95);
         return;
       }
 
@@ -404,7 +406,7 @@ window.SG = window.SG || {};
         }
         particles.addShockwave(this.x, this.y, 320, '#ffb838', 0.65, 4.5);
         particles.burst(this.x, this.y, 48, '#ffb838', 110, 380, 0.7, true);
-        particles.addText(this.x, this.y - 34, this.mods.evoPhoenixEternal > 0 ? 'БЕССМЕРТНЫЙ ФЕНИКС!' : 'ФЕНИКС: ВОЗРОЖДЕНИЕ!', '#ffb838', 1.32);
+        particles.addText(this.x, this.y - 34, this.mods.evoPhoenixEternal > 0 ? tr('ent.phoenixEternal', null, 'БЕССМЕРТНЫЙ ФЕНИКС!') : tr('ent.phoenixRevive', null, 'ФЕНИКС: ВОЗРОЖДЕНИЕ!'), '#ffb838', 1.32);
         if (game) {
           if (this.mods.evoPhoenixEternal > 0 && typeof SG.GravityWell === 'function') {
             for (const sgn of [-1, 1]) {
@@ -416,7 +418,7 @@ window.SG = window.SG || {};
           for (let i = game.enemies.length - 1; i >= 0; i--) {
             const e = game.enemies[i];
             if (!e.dead && Math.hypot(e.x - this.x, e.y - this.y) <= 320 + e.radius) {
-              game.damageEnemy(e, Math.round(180 + this.maxHp * 0.8), '#ffb838', 'ФЕНИКС!');
+              game.damageEnemy(e, Math.round(180 + this.maxHp * 0.8), '#ffb838', tr('ent.phoenix', null, 'ФЕНИКС!'));
             }
           }
         }
@@ -433,7 +435,7 @@ window.SG = window.SG || {};
         this.aegisCooldown = Math.max(5, 10 - (this.mods.aegisBlast - 1) * 2.5);
         this.invulnTimer = isImmortal ? 2.0 : 1.2;
         particles.addShockwave(this.x, this.y, bastionR, '#7dd3fc', 0.5, 4);
-        particles.addText(this.x, this.y - 28, isImmortal ? 'НЕПРОБИВАЕМАЯ ЭГИДА!' : 'КВАНТОВЫЙ БАСТИОН!', '#7dd3fc', 1.2);
+        particles.addText(this.x, this.y - 28, isImmortal ? tr('ent.immortalAegis', null, 'НЕПРОБИВАЕМАЯ ЭГИДА!') : tr('ent.quantumBastion', null, 'КВАНТОВЫЙ БАСТИОН!'), '#7dd3fc', 1.2);
         for (let i = 0; i < game.enemies.length; i++) {
           const e = game.enemies[i];
           if (e.dead) continue;
@@ -1092,7 +1094,7 @@ window.SG = window.SG || {};
         particles.addText(
           e.x,
           e.y - e.radius - 26,
-          targetPhase === 2 ? 'ФАЗА 2: ПЕРЕГРУЗКА!' : 'ФАЗА 3: КРИТИЧЕСКИЙ КОЛЛАПС!',
+          targetPhase === 2 ? tr('ent.phase2', null, 'ФАЗА 2: ПЕРЕГРУЗКА!') : tr('ent.phase3', null, 'ФАЗА 3: КРИТИЧЕСКИЙ КОЛЛАПС!'),
           '#ff9e2c',
           1.35,
           2.0
@@ -1345,7 +1347,7 @@ window.SG = window.SG || {};
             e.specialTimer = phase === 3 ? 4.1 : 5.4;
             e.dashTelegraph = 0.72;
             particles.addShockwave(e.x, e.y, 120, '#ff3b6b', 0.55, 2.8);
-            particles.addText(e.x, e.y - 36, 'РЫВОК!', '#ff3b6b', 1.15);
+            particles.addText(e.x, e.y - 36, tr('ent.lunge', null, 'РЫВОК!'), '#ff3b6b', 1.15);
           }
         }
       }
@@ -1454,7 +1456,7 @@ window.SG = window.SG || {};
             e.x = Math.max(minX, Math.min(bounds.width - minX, player.x + Math.cos(warpAng) * 300));
             e.y = Math.max(minY, Math.min(bounds.height - minY, player.y + Math.sin(warpAng) * 300));
             particles.addShockwave(e.x, e.y, 200, '#b95cff', 0.48, 3.4);
-            particles.addText(e.x, e.y - 38, 'ФАЗОВЫЙ СКАЧОК!', '#d98aff', 1.2);
+            particles.addText(e.x, e.y - 38, tr('ent.phaseWarp', null, 'ФАЗОВЫЙ СКАЧОК!'), '#d98aff', 1.2);
           } else {
             particles.addShockwave(e.x, e.y, 190, '#ffb838', 0.42, 3.0);
           }
