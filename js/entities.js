@@ -716,7 +716,7 @@ window.SG = window.SG || {};
     renderAuras(ctx) {
       const m = this.mods;
       const t = this.auraPhase;
-      const rMult = m.auraRadiusMult || 1.0;
+      const rMult = getEffectiveAuraMult(m.auraRadiusMult);
 
       // Solar Corona burn aura
       if (m.coronaRadius > 0) {
@@ -921,7 +921,7 @@ window.SG = window.SG || {};
       radius: 30,
       color: '#ff2a5f',
       score: 2500,
-      xp: 420,
+      xp: 560,
       isBoss: true
     },
     boss_archon: {
@@ -931,13 +931,42 @@ window.SG = window.SG || {};
       radius: 34,
       color: '#ffb838',
       score: 3600,
-      xp: 560,
+      xp: 780,
       isBoss: true
     }
   };
 
-  function createEnemy(typeKey, x, y, waveScale = 1.0) {
+  function getEffectiveAuraMult(rawMult) {
+    const r = Math.max(1.0, rawMult || 1.0);
+    if (r <= 1.45) return r;
+    // Smooth diminishing returns above 1.45x (asymptotes toward ~2.15x instead of full-screen 3.5x+)
+    return 1.45 + 0.70 * (1 - Math.exp(-(r - 1.45) * 0.9));
+  }
+
+  function getEffectiveAuraPower(rawPower) {
+    const p = Math.max(0.1, rawPower || 1.0);
+    if (p <= 3.0) return p;
+    // Gentle diminishing returns above 3.0x stacked aura power
+    return 3.0 + Math.pow(p - 3.0, 0.72) * 1.4;
+  }
+
+  function createEnemy(typeKey, x, y, waveScale = 1.0, opts = {}) {
     const def = ENEMY_TYPES[typeKey];
+    const waveNum = Math.max(1, opts.wave || 1);
+    const isElite = !def.isBoss && !!opts.isElite;
+    const hpMult = waveScale * (isElite ? 2.8 : 1.0);
+    const fireRateMult = (1 + Math.min(1.1, (waveNum - 1) * 0.045)) * (isElite ? 1.22 : 1.0);
+    const bulletSpeedMult = 1 + Math.min(0.45, (waveNum - 1) * 0.02);
+    const dmgMult = isElite ? 1.3 : 1.0;
+    let auraResist = 0;
+    if (def.isBoss) {
+      auraResist = Math.min(0.65, 0.45 + Math.max(0, waveNum - 5) * 0.015);
+    } else if (isElite) {
+      auraResist = Math.min(0.68, 0.45 + Math.max(0, waveNum - 4) * 0.015);
+    } else {
+      auraResist = Math.min(0.45, Math.max(0, (waveNum - 4) * 0.032));
+    }
+
     const e = {
       type: typeKey,
       name: def.name,
@@ -946,14 +975,20 @@ window.SG = window.SG || {};
       vx: 0,
       vy: 0,
       angle: 0,
-      hp: Math.round(def.hp * waveScale),
-      maxHp: Math.round(def.hp * waveScale),
-      speed: def.speed * (1 + Math.min(0.35, (waveScale - 1) * 0.12)),
-      radius: def.radius,
+      hp: Math.round(def.hp * hpMult),
+      maxHp: Math.round(def.hp * hpMult),
+      speed: def.speed * (1 + Math.min(0.75, (waveNum - 1) * 0.032)) * (isElite ? 1.18 : 1.0),
+      radius: isElite ? Math.round(def.radius * 1.22) : def.radius,
       color: def.color,
-      score: def.score,
-      xp: Math.round(def.xp * (1 + Math.max(0, waveScale - 1) * 0.5)),
+      score: Math.round(def.score * (1 + Math.max(0, waveNum - 1) * 0.18) * (isElite ? 2.5 : 1.0)),
+      xp: Math.round(def.xp * (1 + Math.max(0, waveNum - 1) * (def.isBoss ? 0.22 : 0.08)) * (isElite ? 1.45 : 1.0)),
       isBoss: !!def.isBoss,
+      isElite,
+      waveNum,
+      fireRateMult,
+      bulletSpeedMult,
+      dmgMult,
+      auraResist,
       bossPhase: 1,
       specialTimer: 3.4,
       dashTimer: 0,
@@ -996,19 +1031,19 @@ window.SG = window.SG || {};
     if (e.stunImmuneTimer > 0) {
       e.stunImmuneTimer = Math.max(0, e.stunImmuneTimer - dt);
     }
-    if (e.isBoss && e.stunTimer > 0) {
+    if ((e.isBoss || e.isElite) && e.stunTimer > 0) {
       if (e.stunImmuneTimer > 0) {
         e.stunTimer = 0;
       } else {
-        e.stunTimer = Math.min(e.stunTimer, 0.55);
+        e.stunTimer = Math.min(e.stunTimer, e.isBoss ? 0.55 : 0.85);
       }
     }
 
     if (e.stunTimer > 0) {
-      e.stunTimer -= e.isBoss ? dt * 2.5 : dt;
-      if (e.isBoss && e.stunTimer <= 0) {
+      e.stunTimer -= e.isBoss ? dt * 2.5 : (e.isElite ? dt * 1.7 : dt);
+      if ((e.isBoss || e.isElite) && e.stunTimer <= 0) {
         e.stunTimer = 0;
-        e.stunImmuneTimer = 4.0;
+        e.stunImmuneTimer = e.isBoss ? 4.0 : 1.8;
       }
       e.vx *= Math.exp(-4 * dt);
       e.vy *= Math.exp(-4 * dt);
@@ -1065,7 +1100,7 @@ window.SG = window.SG || {};
           // Hawking Radiation burn + Event Horizon Crush (heavily resisted by bosses)!
           e.hp -= player.mods.hawkingDps * dt;
           if (player.mods.eventCrushPct > 0) {
-            const crushResist = e.isBoss ? 0.22 : 1.0;
+            const crushResist = e.isBoss ? 0.22 : (e.isElite ? 0.55 : 1.0);
             e.hp -= e.maxHp * player.mods.eventCrushPct * crushResist * dt;
           }
         }
@@ -1078,6 +1113,10 @@ window.SG = window.SG || {};
     const distP = Math.hypot(dxP, dyP) || 1;
     const dirX = dxP / distP;
     const dirY = dyP / distP;
+    const fr = e.fireRateMult || 1.0;
+    const bs = e.bulletSpeedMult || 1.0;
+    const dm = e.dmgMult || 1.0;
+    const wn = e.waveNum || 1;
 
     // Archetype AI behaviors
     if (e.type === 'swarmer') {
@@ -1115,22 +1154,22 @@ window.SG = window.SG || {};
         e.vy *= Math.exp(-6 * dt);
         // Track lead angle until last 0.18s so player can dodge or bend!
         if (e.chargeTimer > 0.18) {
-          e.angle = SG.solveInterceptAngle(e.x, e.y, player.x, player.y, player.vx, player.vy, 560);
+          e.angle = SG.solveInterceptAngle(e.x, e.y, player.x, player.y, player.vx, player.vy, 560 * bs);
         }
         if (e.chargeTimer <= 0) {
           game.spawnBullet({
             x: e.x + Math.cos(e.angle) * 20,
             y: e.y + Math.sin(e.angle) * 20,
-            vx: Math.cos(e.angle) * 560,
-            vy: Math.sin(e.angle) * 560,
-            damage: 18,
+            vx: Math.cos(e.angle) * 560 * bs,
+            vy: Math.sin(e.angle) * 560 * bs,
+            damage: Math.round(18 * dm),
             radius: 4.5,
             color: '#ff9e2c',
             fromPlayer: false,
             isLance: true
           });
           audio.playShoot(true);
-          e.stateTimer = 2.4 + Math.random() * 0.8;
+          e.stateTimer = Math.max(1.05, (2.4 + Math.random() * 0.8) / fr);
         }
       } else {
         e.vx += (dirX * push + strafeX * 0.8) * e.speed * 2.8 * dt;
@@ -1138,7 +1177,7 @@ window.SG = window.SG || {};
         e.angle = Math.atan2(dyP, dxP);
         e.stateTimer -= dt;
         if (e.stateTimer <= 0 && distP < 680) {
-          e.chargeTimer = 0.95; // Telegraph laser sight
+          e.chargeTimer = Math.max(0.55, 0.95 / Math.sqrt(fr)); // Telegraph laser sight
         }
       }
 
@@ -1156,15 +1195,17 @@ window.SG = window.SG || {};
 
       e.stateTimer -= dt;
       if (e.stateTimer <= 0) {
-        e.stateTimer = 2.2;
-        for (let k = -1; k <= 1; k += 2) {
-          const a = e.angle + k * 0.18;
+        e.stateTimer = Math.max(0.95, 2.2 / fr);
+        const bolts = (wn >= 8 || e.isElite) ? [-1, 0, 1] : [-1, 1];
+        for (let bi = 0; bi < bolts.length; bi++) {
+          const k = bolts[bi];
+          const a = e.angle + k * (bolts.length === 3 ? 0.16 : 0.18);
           game.spawnBullet({
             x: e.x + Math.cos(a) * 22,
             y: e.y + Math.sin(a) * 22,
-            vx: Math.cos(a) * 310,
-            vy: Math.sin(a) * 310,
-            damage: 12,
+            vx: Math.cos(a) * 310 * bs,
+            vy: Math.sin(a) * 310 * bs,
+            damage: Math.round(12 * dm),
             radius: 4.2,
             color: '#38bdf8',
             fromPlayer: false
@@ -1183,18 +1224,18 @@ window.SG = window.SG || {};
 
       e.stateTimer -= dt;
       if (e.stateTimer <= 0) {
-        e.stateTimer = 2.9;
+        e.stateTimer = Math.max(1.25, 2.9 / fr);
         grid.applyRadialForce(e.x, e.y, 680, 180, 285);
         particles.addShockwave(e.x, e.y, 130, '#c06cff', 0.4, 2.2);
-        const count = 6;
+        const count = 6 + Math.min(6, Math.floor((wn - 1) / 4)) + (e.isElite ? 2 : 0);
         for (let k = 0; k < count; k++) {
           const a = e.angle + (k * Math.PI * 2) / count;
           game.spawnBullet({
             x: e.x,
             y: e.y,
-            vx: Math.cos(a) * 245,
-            vy: Math.sin(a) * 245,
-            damage: 11,
+            vx: Math.cos(a) * 245 * bs,
+            vy: Math.sin(a) * 245 * bs,
+            damage: Math.round(11 * dm),
             radius: 4.5,
             color: '#d580ff',
             fromPlayer: false
@@ -1203,13 +1244,13 @@ window.SG = window.SG || {};
       }
 
     } else if (e.type === 'weaver') {
-      // Teleports periodically & fires 3-round aimed bursts
+      // Teleports periodically & fires 3-round aimed bursts (5-round on late waves / Elites)
       e.vx += dirX * e.speed * 2.2 * dt;
       e.vy += dirY * e.speed * 2.2 * dt;
       e.angle = Math.atan2(dyP, dxP);
       e.stateTimer -= dt;
       if (e.stateTimer <= 0) {
-        e.stateTimer = 2.6;
+        e.stateTimer = Math.max(1.15, 2.6 / fr);
         // Blink jump perpendicular to player!
         particles.burst(e.x, e.y, 14, '#22ffa6', 50, 170, 0.35);
         const blinkAng = Math.atan2(dyP, dxP) + (Math.random() < 0.5 ? 1.2 : -1.2);
@@ -1217,15 +1258,16 @@ window.SG = window.SG || {};
         e.y = Math.max(50, Math.min(bounds.height - 50, player.y - Math.sin(blinkAng) * 240));
         particles.burst(e.x, e.y, 14, '#22ffa6', 50, 170, 0.35);
 
-        const fireAng = SG.solveInterceptAngle(e.x, e.y, player.x, player.y, player.vx, player.vy, 360);
-        for (let k = -1; k <= 1; k++) {
+        const fireAng = SG.solveInterceptAngle(e.x, e.y, player.x, player.y, player.vx, player.vy, 360 * bs);
+        const half = (wn >= 10 || e.isElite) ? 2 : 1;
+        for (let k = -half; k <= half; k++) {
           const a = fireAng + k * 0.14;
           game.spawnBullet({
             x: e.x,
             y: e.y,
-            vx: Math.cos(a) * 360,
-            vy: Math.sin(a) * 360,
-            damage: 11,
+            vx: Math.cos(a) * 360 * bs,
+            vy: Math.sin(a) * 360 * bs,
+            damage: Math.round(11 * dm),
             radius: 4,
             color: '#22ffa6',
             fromPlayer: false
@@ -1293,9 +1335,11 @@ window.SG = window.SG || {};
 
       e.stateTimer -= dt;
       if (e.stateTimer <= 0) {
-        e.stateTimer = phase === 1 ? 1.25 : (phase === 2 ? 1.02 : 0.82);
+        const bossFr = 1 + Math.min(0.35, Math.max(0, wn - 5) * 0.018);
+        const bossBs = 1 + Math.min(0.28, Math.max(0, wn - 5) * 0.014);
+        e.stateTimer = (phase === 1 ? 1.25 : (phase === 2 ? 1.02 : 0.82)) / bossFr;
         const arms = phase === 1 ? 10 : (phase === 2 ? 12 : 14);
-        const bSpd = 305 + phase * 22;
+        const bSpd = (305 + phase * 22) * bossBs;
         const bDmg = 16 + phase * 2;
         for (let k = 0; k < arms; k++) {
           const a = e.phase * 0.75 + (k * Math.PI * 2) / arms;
@@ -1405,9 +1449,11 @@ window.SG = window.SG || {};
 
       e.stateTimer -= dt;
       if (e.stateTimer <= 0) {
-        e.stateTimer = phase === 1 ? 0.95 : (phase === 2 ? 0.78 : 0.64);
+        const bossFr = 1 + Math.min(0.35, Math.max(0, wn - 5) * 0.018);
+        const bossBs = 1 + Math.min(0.28, Math.max(0, wn - 5) * 0.014);
+        e.stateTimer = (phase === 1 ? 0.95 : (phase === 2 ? 0.78 : 0.64)) / bossFr;
         const lances = phase === 1 ? 4 : (phase === 2 ? 5 : 6);
-        const lSpd = 330 + phase * 25;
+        const lSpd = (330 + phase * 25) * bossBs;
         const lDmg = 15 + phase * 2;
         for (let core = -1; core <= 1; core += 2) {
           const cx = e.x + Math.cos(e.orbitAngle) * e.twinDist * core;
@@ -1449,11 +1495,12 @@ window.SG = window.SG || {};
       e.hp -= (e.burnDps || 24) * thermalMult * dt;
     }
 
-    // Damping & integration (slowed if Cryo-Stasis aura active; bosses resist 55% of slow)
+    // Damping & integration (slowed if Cryo-Stasis aura active; bosses & elites resist slow)
     if (e.cryoTimer > 0) {
       e.cryoTimer = Math.max(0, e.cryoTimer - dt);
     }
-    const slowAmt = e.cryoTimer > 0 && e.cryoSlow ? (e.isBoss ? e.cryoSlow * 0.45 : e.cryoSlow) : 0;
+    const slowResist = e.isBoss ? 0.45 : (e.isElite ? 0.55 : 1.0);
+    const slowAmt = e.cryoTimer > 0 && e.cryoSlow ? e.cryoSlow * slowResist : 0;
     const cryoMult = 1 - slowAmt;
     const damp = Math.exp(-2.8 * dt);
     e.vx *= damp;
@@ -1557,7 +1604,30 @@ window.SG = window.SG || {};
     }
 
     ctx.translate(e.x, e.y);
+
+    if (e.isElite) {
+      ctx.save();
+      const pulse = 0.62 + 0.28 * Math.sin(e.phase * 1.6);
+      ctx.strokeStyle = `rgba(255, 209, 102, ${pulse.toFixed(2)})`;
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius + 5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 165, 56, 0.45)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius + 9, e.phase * 0.5, e.phase * 0.5 + Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.save();
     ctx.rotate(e.angle);
+    if (e.isElite) {
+      ctx.scale(1.18, 1.18);
+    }
 
     const strokeCol = e.hitFlash > 0 ? '#ffffff' : (e.stunTimer > 0 ? '#7df9ff' : (e.cryoTimer > 0 ? '#7dd3fc' : e.color));
     ctx.fillStyle = '#0d1224';
@@ -1639,15 +1709,22 @@ window.SG = window.SG || {};
       ctx.lineTo(38, 18);
       ctx.stroke();
     }
+    ctx.restore();
 
-    // Mini HP bar for bruised tough enemies
-    if (!e.isBoss && e.hp < e.maxHp) {
-      ctx.rotate(-e.angle);
-      const bw = 26;
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.fillRect(-bw / 2, -e.radius - 10, bw, 3.5);
-      ctx.fillStyle = e.color;
-      ctx.fillRect(-bw / 2, -e.radius - 10, bw * Math.max(0, e.hp / e.maxHp), 3.5);
+    // Mini HP bar for bruised tough enemies & Elites
+    if (!e.isBoss && (e.hp < e.maxHp || e.isElite)) {
+      const bw = e.isElite ? 34 : 26;
+      const barH = e.isElite ? 4.5 : 3.5;
+      const barY = -e.radius - (e.isElite ? 14 : 10);
+      ctx.fillStyle = 'rgba(0,0,0,0.72)';
+      ctx.fillRect(-bw / 2, barY, bw, barH);
+      if (e.isElite) {
+        ctx.strokeStyle = 'rgba(255, 209, 102, 0.75)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-bw / 2, barY, bw, barH);
+      }
+      ctx.fillStyle = e.isElite ? '#ffd166' : e.color;
+      ctx.fillRect(-bw / 2, barY, bw * Math.max(0, e.hp / e.maxHp), barH);
     }
 
     ctx.restore();
@@ -1656,6 +1733,8 @@ window.SG = window.SG || {};
   SG.GravityWell = GravityWell;
   SG.Player = Player;
   SG.ENEMY_TYPES = ENEMY_TYPES;
+  SG.getEffectiveAuraMult = getEffectiveAuraMult;
+  SG.getEffectiveAuraPower = getEffectiveAuraPower;
   SG.createEnemy = createEnemy;
   SG.updateEnemy = updateEnemy;
   SG.renderEnemy = renderEnemy;

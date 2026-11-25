@@ -293,7 +293,7 @@ window.SG = window.SG || {};
       desc: '+22% к скорострельности главного калибра и +14% шанс критического выстрела (2× урон).',
       apply(mods) {
         mods.fireRateMult += 0.22;
-        mods.critChance = Math.min(0.85, mods.critChance + 0.14);
+        mods.critChance = Math.max(mods.critChance, Math.min(0.90, mods.critChance + 0.14));
       }
     },
     {
@@ -317,7 +317,7 @@ window.SG = window.SG || {};
       maxStacks: 4,
       desc: '+45 к макс. прочности корпуса (мгновенно лечит) и +12% к броне, снижающей весь входящий урон.',
       apply(mods, player) {
-        mods.armor = Math.min(0.65, mods.armor + 0.12);
+        mods.armor = Math.max(mods.armor, Math.min(0.75, mods.armor + 0.12));
         if (player) {
           player.maxHp += 45;
           player.hp = Math.min(player.maxHp, player.hp + 45);
@@ -1975,8 +1975,21 @@ window.SG = window.SG || {};
     }
   });
 
-  function rollUpgradeChoices(stacksMap, count = 4) {
-    const eligible = UPGRADES.filter(u => (stacksMap[u.id] || 0) < u.maxStacks);
+  function countEligibleUpgrades(stacksMap, evolvedSet = null) {
+    let total = 0;
+    for (let i = 0; i < UPGRADES.length; i++) {
+      const u = UPGRADES[i];
+      if ((stacksMap[u.id] || 0) < u.maxStacks && !(evolvedSet && evolvedSet.has(u.id))) {
+        total++;
+      }
+    }
+    return total;
+  }
+
+  function rollUpgradeChoices(stacksMap, count = 4, evolvedSet = null) {
+    const eligible = UPGRADES.filter(u =>
+      (stacksMap[u.id] || 0) < u.maxStacks && !(evolvedSet && evolvedSet.has(u.id))
+    );
     const pool = eligible.map(u => {
       const s = stacksMap[u.id] || 0;
       const weight = (s + 1 === u.maxStacks) ? 3.2 : (s > 0 ? 2.1 : 1.0);
@@ -2003,5 +2016,6 @@ window.SG = window.SG || {};
   SG.UPGRADES = UPGRADES;
   SG.EVOLUTIONS = EVOLUTIONS;
   SG.createDefaultMods = createDefaultMods;
+  SG.countEligibleUpgrades = countEligibleUpgrades;
   SG.rollUpgradeChoices = rollUpgradeChoices;
 })(window.SG);

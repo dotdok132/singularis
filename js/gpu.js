@@ -451,7 +451,7 @@ window.SG = window.SG || {};
       const {
         width, height, dpr, timeSec, timeScale, shakeX, shakeY,
         stars, grid, particles, wells, bullets, enemies, pickups,
-        player, autopilot, state, quality, preset
+        player, autopilot, state, quality, preset, isTouchDevice
       } = frame;
 
       const bGrid = this.batches.lineGrid;
@@ -687,8 +687,9 @@ window.SG = window.SG || {};
             }
           }
 
-          const cosA = Math.cos(e.angle);
-          const sinA = Math.sin(e.angle);
+          const eScale = e.isElite ? 1.18 : 1.0;
+          const cosA = Math.cos(e.angle) * eScale;
+          const sinA = Math.sin(e.angle) * eScale;
           let poly = SWARMER_POLY;
           if (e.type === 'sniper') poly = SNIPER_POLY;
           else if (e.type === 'phalanx') poly = PHALANX_POLY;
@@ -696,10 +697,16 @@ window.SG = window.SG || {};
           else if (e.type === 'weaver') poly = WEAVER_POLY;
           else if (e.type === 'boss_leviathan') poly = LEVI_HEAD_POLY;
 
+          if (e.isElite) {
+            const pulse = 0.62 + 0.28 * Math.sin(e.phase * 1.6);
+            this.pushCircleOutline(bLineAlpha, e.x, e.y, e.radius + 5, 22, 1.0, 0.82, 0.4, pulse);
+            this.pushCircleOutline(bLineAlpha, e.x, e.y, e.radius + 9, 22, 1.0, 0.65, 0.22, 0.45, e.phase * 0.5, e.phase * 0.5 + Math.PI * 2, true);
+          }
+
           this.pushTransformedPoly(poly, e.x, e.y, cosA, sinA, hullCol, strokeCol, bTriAlpha, bLineAlpha);
 
           if (e.type === 'phalanx') {
-            this.pushCircleOutline(bLineAlpha, e.x, e.y, 24, 14, 0.49, 0.98, 1.0, 0.95, e.angle - 1.12, e.angle + 1.12);
+            this.pushCircleOutline(bLineAlpha, e.x, e.y, 24 * eScale, 14, 0.49, 0.98, 1.0, 0.95, e.angle - 1.12, e.angle + 1.12);
           } else if (e.type === 'boss_leviathan') {
             this.pushLine(
               bLineAlpha,
@@ -715,12 +722,14 @@ window.SG = window.SG || {};
             );
           }
 
-          if (!e.isBoss && e.hp < e.maxHp) {
-            const bw = 26;
+          if (!e.isBoss && (e.hp < e.maxHp || e.isElite)) {
+            const bw = e.isElite ? 34 : 26;
+            const barH = e.isElite ? 4.5 : 3.5;
             const bx = e.x - bw * 0.5;
-            const by = e.y - e.radius - 10;
-            this.pushRect(bTriAlpha, bx, by, bw, 3.5, 0, 0, 0, 0.65);
-            this.pushRect(bTriAlpha, bx, by, bw * Math.max(0, e.hp / e.maxHp), 3.5, baseRgb[0], baseRgb[1], baseRgb[2], 1.0);
+            const by = e.y - e.radius - (e.isElite ? 14 : 10);
+            this.pushRect(bTriAlpha, bx, by, bw, barH, 0, 0, 0, 0.72);
+            const barCol = e.isElite ? [1.0, 0.82, 0.4] : baseRgb;
+            this.pushRect(bTriAlpha, bx, by, bw * Math.max(0, e.hp / e.maxHp), barH, barCol[0], barCol[1], barCol[2], 1.0);
           }
         }
       }
@@ -774,7 +783,7 @@ window.SG = window.SG || {};
         // Auras
         const m = player.mods;
         const ap = player.auraPhase;
-        const rMult = m.auraRadiusMult || 1.0;
+        const rMult = (window.SG && SG.getEffectiveAuraMult) ? SG.getEffectiveAuraMult(m.auraRadiusMult) : (m.auraRadiusMult || 1.0);
         if (m.dilationAura > 0) {
           this.pushCircleOutline(bLineAlpha, player.x, player.y, 145, 32, 0.38, 0.65, 0.98, 0.16);
         }
@@ -861,9 +870,9 @@ window.SG = window.SG || {};
       if (enemies) {
         const boss = enemies.find(e => e.isBoss && !e.dead);
         if (boss) {
-          const bw = Math.min(480, width * 0.62);
+          const bw = Math.min(480, width * (isTouchDevice ? 0.56 : 0.62));
           const bx = (width - bw) * 0.5;
-          const by = height - 42;
+          const by = isTouchDevice ? 78 : height - 42;
           const bRgb = this.parseHexRgb(boss.color);
           this.pushRect(bTriAlpha, bx, by, bw, 12, 0.024, 0.039, 0.094, 0.82);
           this.pushRect(bTriAlpha, bx + 2, by + 2, (bw - 4) * Math.max(0, boss.hp / boss.maxHp), 8, bRgb[0], bRgb[1], bRgb[2], 1.0);

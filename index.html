@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>SINGULARIS — Архитектор Гравитации</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=1.4.0">
 </head>
 <body>
   <canvas id="gpu-canvas"></canvas>
@@ -27,7 +27,7 @@
         <div class="bar-row">
           <span class="bar-label">ХРОНО</span>
           <div class="bar-track"><div id="bar-chrono" class="bar-fill fill-chrono" style="width:100%"></div></div>
-          <span class="bar-val">SPACE</span>
+          <span class="bar-val key-hint-val">SPACE</span>
         </div>
         <div class="bar-row">
           <span class="bar-label" id="hud-level">УР. 1</span>
@@ -49,12 +49,13 @@
 
     <div class="hud-actions">
       <div class="btn-row">
-        <button type="button" id="btn-hud-menu" class="hud-btn">Меню [Esc]</button>
-        <button type="button" id="btn-hud-ai" class="hud-btn">ИИ-Пилот [P]</button>
-        <button type="button" id="btn-hud-polarity" class="hud-btn">Черная дыра [R]</button>
+        <button type="button" id="btn-hud-menu" class="hud-btn">Меню <span class="key-hint">[Esc]</span></button>
+        <button type="button" id="btn-hud-ai" class="hud-btn">ИИ-Пилот <span class="key-hint">[P]</span></button>
+        <button type="button" id="btn-hud-polarity" class="hud-btn desktop-only-hud">Черная дыра <span class="key-hint">[R]</span></button>
         <button type="button" id="btn-hud-mute" class="hud-btn">Звук: ВКЛ</button>
-        <button type="button" id="btn-hud-modules" class="hud-btn">Модули [B]</button>
-        <button type="button" id="btn-hud-codex" class="hud-btn">Кодекс [H]</button>
+        <button type="button" id="btn-hud-modules" class="hud-btn desktop-only-hud">Модули <span class="key-hint">[B]</span></button>
+        <button type="button" id="btn-hud-codex" class="hud-btn desktop-only-hud">Кодекс <span class="key-hint">[H]</span></button>
+        <button type="button" id="btn-hud-fullscreen" class="hud-btn touch-only-hud" aria-label="Полный экран">⛶</button>
       </div>
       <div class="ability-pills">
         <span id="hud-dash" class="ready">[Shift] Рывок: ГОТОВ</span>
@@ -68,22 +69,49 @@
     </div>
   </header>
   <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
+  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v1.4.0</div>
 
-  <!-- Mobile / Touch On-Screen Controls -->
+  <!-- Mobile / Tablet Twin-Stick & Ability Arc Controls -->
   <div id="touch-controls" class="touch-controls" hidden>
     <div id="touch-joy-zone" class="touch-joy-zone" aria-label="Джойстик движения">
       <div id="touch-joy-base" class="touch-joy-base">
         <div id="touch-joy-knob" class="touch-joy-knob"></div>
       </div>
     </div>
-    <div id="touch-actions" class="touch-actions" aria-label="Кнопки управления">
-      <button type="button" id="touch-polarity" class="touch-btn touch-sm">Ч/Б</button>
-      <button type="button" id="touch-rewind" class="touch-btn touch-sm">ОТКАТ</button>
-      <button type="button" id="touch-detonate" class="touch-btn touch-sm">ВЗРЫВ</button>
-      <button type="button" id="touch-bt" class="touch-btn touch-md">ХРОНО</button>
-      <button type="button" id="touch-dash" class="touch-btn touch-md">РЫВОК</button>
-      <button type="button" id="touch-well" class="touch-btn touch-lg touch-violet">ДЫРА</button>
-      <button type="button" id="touch-fire" class="touch-btn touch-xl touch-cyan">ОГОНЬ</button>
+    <div id="touch-right-cluster" class="touch-right-cluster" aria-label="Прицеливание и способности">
+      <button type="button" id="touch-polarity" class="touch-btn touch-polarity" aria-label="Переключить полярность дыры">
+        <span class="tbtn-label">ЧЁРН</span>
+      </button>
+      <button type="button" id="touch-detonate" class="touch-btn touch-detonate" aria-label="Взорвать дыры">
+        <span class="tbtn-cd"></span>
+        <span class="tbtn-label">ВЗРЫВ</span>
+        <span class="tbtn-timer"></span>
+      </button>
+      <button type="button" id="touch-rewind" class="touch-btn touch-rewind" aria-label="Откат времени">
+        <span class="tbtn-cd"></span>
+        <span class="tbtn-label">ОТКАТ</span>
+        <span class="tbtn-timer"></span>
+      </button>
+      <button type="button" id="touch-bt" class="touch-btn touch-bt" aria-label="Замедление времени">
+        <span class="tbtn-cd"></span>
+        <span class="tbtn-label">ХРОНО</span>
+        <span class="tbtn-timer"></span>
+      </button>
+      <button type="button" id="touch-well" class="touch-btn touch-well touch-violet" aria-label="Поставить гравитационную дыру">
+        <span class="tbtn-cd"></span>
+        <span class="tbtn-label">ДЫРА</span>
+        <span class="tbtn-timer"></span>
+      </button>
+      <button type="button" id="touch-dash" class="touch-btn touch-dash" aria-label="Фазовый рывок">
+        <span class="tbtn-cd"></span>
+        <span class="tbtn-label">РЫВОК</span>
+        <span class="tbtn-timer"></span>
+      </button>
+      <div id="touch-aim-zone" class="touch-aim-zone" aria-label="Джойстик прицела и огня">
+        <div id="touch-aim-base" class="touch-aim-base">
+          <div id="touch-aim-knob" class="touch-aim-knob">ОГОНЬ</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -92,6 +120,7 @@
     <div class="rotate-icon" aria-hidden="true">📱↻</div>
     <div class="rotate-title">ПОВЕРНИТЕ ЭКРАН</div>
     <div class="rotate-sub">Для комфортной игры переверните телефон горизонтально</div>
+    <button type="button" id="btn-dismiss-rotate" class="btn-ghost rotate-dismiss">Играть вертикально</button>
   </div>
 
   <!-- Main Menu Modal (Native <dialog>) -->
@@ -165,7 +194,10 @@
       </div>
     </div>
 
-    <div id="title-best-record" class="record-line"></div>
+    <div class="title-footer">
+      <div id="title-best-record" class="record-line"></div>
+      <span id="title-version" class="version-pill">Версия v1.4.0</span>
+    </div>
   </dialog>
 
   <!-- In-Game Pause Menu Modal -->
@@ -278,14 +310,58 @@
         </div>
       </label>
 
+      <label class="setting-row" for="set-touch-mode">
+        <div class="setting-info">
+          <span class="setting-title">Сенсорное управление</span>
+          <span class="setting-desc">Экранные стики и кнопки для телефона и планшета</span>
+        </div>
+        <div class="setting-control">
+          <select id="set-touch-mode" class="setting-select">
+            <option value="auto" selected>Авто</option>
+            <option value="on">Всегда вкл</option>
+            <option value="off">Выкл</option>
+          </select>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-touch-floating">
+        <div class="setting-info">
+          <span class="setting-title">Плавающий джойстик</span>
+          <span class="setting-desc">Левый стик появляется там, где коснулся палец</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-touch-floating" checked>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-touch-autofire">
+        <div class="setting-info">
+          <span class="setting-title">Авто-стрельба (сенсор)</span>
+          <span class="setting-desc">Автоматический огонь по направлению прицела при наличии врагов</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-touch-autofire">
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-touch-canvas-well">
+        <div class="setting-info">
+          <span class="setting-title">Тап по полю = Дыра</span>
+          <span class="setting-desc">Нажатие или перетягивание по арене ставит гравитационную дыру</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-touch-canvas-well" checked>
+        </div>
+      </label>
+
       <label class="setting-row" for="set-touch-scale">
         <div class="setting-info">
           <span class="setting-title">Размер кнопок (телефон)</span>
-          <span class="setting-desc">Масштаб сенсорных кнопок и джойстика на экране</span>
+          <span class="setting-desc">Масштаб сенсорных кнопок и джойстиков на экране</span>
         </div>
         <div class="setting-control">
-          <input type="range" id="set-touch-scale" min="80" max="160" step="5" value="115">
-          <span id="val-touch-scale" class="setting-val">115%</span>
+          <input type="range" id="set-touch-scale" min="75" max="150" step="5" value="100">
+          <span id="val-touch-scale" class="setting-val">100%</span>
         </div>
       </label>
 
@@ -295,8 +371,8 @@
           <span class="setting-desc">Видимость сенсорного управления поверх поля боя</span>
         </div>
         <div class="setting-control">
-          <input type="range" id="set-touch-opacity" min="30" max="100" step="5" value="85">
-          <span id="val-touch-opacity" class="setting-val">85%</span>
+          <input type="range" id="set-touch-opacity" min="30" max="100" step="5" value="80">
+          <span id="val-touch-opacity" class="setting-val">80%</span>
         </div>
       </label>
     </div>
@@ -406,12 +482,12 @@
     </div>
   </dialog>
 
-  <script src="js/physics.js"></script>
-  <script src="js/gpu.js"></script>
-  <script src="js/audio.js"></script>
-  <script src="js/upgrades.js"></script>
-  <script src="js/entities.js"></script>
-  <script src="js/autopilot.js"></script>
-  <script src="js/game.js"></script>
+  <script src="js/physics.js?v=1.4.0"></script>
+  <script src="js/gpu.js?v=1.4.0"></script>
+  <script src="js/audio.js?v=1.4.0"></script>
+  <script src="js/upgrades.js?v=1.4.0"></script>
+  <script src="js/entities.js?v=1.4.0"></script>
+  <script src="js/autopilot.js?v=1.4.0"></script>
+  <script src="js/game.js?v=1.4.0"></script>
 </body>
 </html>

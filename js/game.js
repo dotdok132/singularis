@@ -4,6 +4,8 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
+  SG.VERSION = 'v1.4.0';
+
   const DIFFICULTIES = {
     easy: { label: 'Кадет', enemyScale: 0.72, dmgScale: 0.75, xpMult: 1.25, scoreMult: 0.8 },
     normal: { label: 'Архитектор', enemyScale: 1.15, dmgScale: 1.0, xpMult: 1.0, scoreMult: 1.0 },
@@ -85,6 +87,10 @@ window.SG = window.SG || {};
       this._subModalOrigin = null;
       this._suppressResumeOnClose = false;
       this._resetConfirmTimer = null;
+      this._aiUpgradeTimer = null;
+      this._upgradeAnimTimer = null;
+      this._upgradeCloseTimer = null;
+      this._upgradeSelecting = false;
       this.catalogFilter = 'all';
       this.catalogQuery = '';
       this.hudTimer = 0;
@@ -101,21 +107,73 @@ window.SG = window.SG || {};
       this._buildDirty = true;
       this.waveSubtitle = '';
       this._lastTouchTime = 0;
-      const coarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-      this.isTouchDevice = coarse || (typeof window !== 'undefined' && ('ontouchstart' in window) && window.innerWidth <= 900);
+      this._upgradeGuardUntil = 0;
+      const hasCoarse = typeof window !== 'undefined' && typeof window.matchMedia === 'function' &&
+        (window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(any-pointer: coarse)').matches);
+      const touchCapable = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+      this._detectedTouch = hasCoarse || (touchCapable && window.innerWidth <= 1366);
+      this.isTouchDevice = this._detectedTouch;
       this.touchInput = {
         moveX: 0,
         moveY: 0,
-        firing: false,
-        bulletTime: false,
         joyId: null,
         joyOriginX: 0,
-        joyOriginY: 0
+        joyOriginY: 0,
+        joyMaxR: 46,
+        aimId: null,
+        aimActive: false,
+        aimDirX: 1,
+        aimDirY: 0,
+        aimHasDir: false,
+        aimOriginX: 0,
+        aimOriginY: 0,
+        aimMaxR: 46,
+        firing: false,
+        bulletTime: false,
+        btId: null,
+        btPressTime: 0,
+        btWasOn: false,
+        wellDragId: null,
+        wellDragSource: null,
+        wellStartX: 0,
+        wellStartY: 0,
+        wellPreviewActive: false,
+        wellPreviewX: 0,
+        wellPreviewY: 0,
+        wellCancel: false
+      };
+
+      const touchBtnEls = (id) => {
+        const el = document.getElementById(id);
+        return {
+          el,
+          cd: el ? el.querySelector('.tbtn-cd') : null,
+          label: el ? el.querySelector('.tbtn-label') : null,
+          timer: el ? el.querySelector('.tbtn-timer') : null
+        };
+      };
+
+      this.touchEls = {
+        root: document.getElementById('touch-controls'),
+        joyZone: document.getElementById('touch-joy-zone'),
+        joyBase: document.getElementById('touch-joy-base'),
+        joyKnob: document.getElementById('touch-joy-knob'),
+        aimZone: document.getElementById('touch-aim-zone'),
+        aimBase: document.getElementById('touch-aim-base'),
+        aimKnob: document.getElementById('touch-aim-knob'),
+        dash: touchBtnEls('touch-dash'),
+        well: touchBtnEls('touch-well'),
+        detonate: touchBtnEls('touch-detonate'),
+        rewind: touchBtnEls('touch-rewind'),
+        bt: touchBtnEls('touch-bt'),
+        polarity: touchBtnEls('touch-polarity')
       };
 
       this.hudEls = {
         hud: document.getElementById('hud'),
         fpsBadge: document.getElementById('fps-badge'),
+        versionBadge: document.getElementById('version-badge'),
+        titleVersion: document.getElementById('title-version'),
         barHp: document.getElementById('bar-hp'),
         valHp: document.getElementById('val-hp'),
         barShield: document.getElementById('bar-shield'),
@@ -133,11 +191,16 @@ window.SG = window.SG || {};
         buildStrip: document.getElementById('hud-build-strip'),
         aiBtn: document.getElementById('btn-hud-ai'),
         polBtn: document.getElementById('btn-hud-polarity'),
+        muteBtn: document.getElementById('btn-hud-mute'),
+        menuBtn: document.getElementById('btn-hud-menu'),
+        fullscreenBtn: document.getElementById('btn-hud-fullscreen'),
         aiBanner: document.getElementById('ai-telemetry-banner')
       };
 
       this.applySettings();
       this.bindEvents();
+      if (this.hudEls.versionBadge) this.hudEls.versionBadge.textContent = `SINGULARIS ${SG.VERSION}`;
+      if (this.hudEls.titleVersion) this.hudEls.titleVersion.textContent = `Версия ${SG.VERSION}`;
       this.resetRun(false);
 
       this.lastTime = performance.now();
@@ -159,8 +222,12 @@ window.SG = window.SG || {};
         screenShake: true,
         trajectoryPreview: true,
         aiTelemetry: true,
-        touchScale: 115,
-        touchOpacity: 85
+        touchMode: 'auto',
+        touchScale: 100,
+        touchOpacity: 80,
+        touchFloating: true,
+        touchAutofire: false,
+        touchCanvasWell: true
       };
       try {
         const raw = localStorage.getItem('singularis_settings');
@@ -169,6 +236,7 @@ window.SG = window.SG || {};
         const merged = { ...defaults, ...parsed };
         if (!DIFFICULTIES[merged.difficulty]) merged.difficulty = 'normal';
         if (!QUALITY_PRESETS[merged.quality]) merged.quality = 'medium';
+        if (!['auto', 'on', 'off'].includes(merged.touchMode)) merged.touchMode = 'auto';
         return merged;
       } catch (_) {
         return defaults;
@@ -183,14 +251,31 @@ window.SG = window.SG || {};
       }
     }
 
+    syncTouchMode() {
+      const mode = this.settings.touchMode || 'auto';
+      if (mode === 'on') this.isTouchDevice = true;
+      else if (mode === 'off') this.isTouchDevice = false;
+      else this.isTouchDevice = !!this._detectedTouch;
+      if (document.body && document.body.classList) {
+        document.body.classList.toggle('is-touch', this.isTouchDevice);
+      }
+    }
+
+    vibrate(ms) {
+      if (this.isTouchDevice && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try { navigator.vibrate(ms); } catch (_) {}
+      }
+    }
+
     applySettings() {
+      this.syncTouchMode();
       this.audio.setMusicVolume((this.settings.musicVol || 0) / 100);
       this.audio.setSfxVolume((this.settings.sfxVol || 0) / 100);
       this.autopilot.showTelemetry = !!this.settings.aiTelemetry;
-      const touchEl = document.getElementById('touch-controls');
+      const touchEl = (this.touchEls && this.touchEls.root) || document.getElementById('touch-controls');
       if (touchEl) {
-        const scale = Math.max(80, Math.min(160, Number(this.settings.touchScale) || 115)) / 100;
-        const opacity = Math.max(30, Math.min(100, Number(this.settings.touchOpacity) || 85)) / 100;
+        const scale = Math.max(75, Math.min(150, Number(this.settings.touchScale) || 100)) / 100;
+        const opacity = Math.max(30, Math.min(100, Number(this.settings.touchOpacity) || 80)) / 100;
         touchEl.style.setProperty('--touch-scale', String(scale));
         touchEl.style.setProperty('--touch-opacity', String(opacity));
       }
@@ -224,12 +309,29 @@ window.SG = window.SG || {};
       if (this.touchInput) {
         this.touchInput.moveX = 0;
         this.touchInput.moveY = 0;
+        this.touchInput.joyId = null;
+        this.touchInput.aimId = null;
+        this.touchInput.aimActive = false;
         this.touchInput.firing = false;
         this.touchInput.bulletTime = false;
-        this.touchInput.joyId = null;
+        this.touchInput.btId = null;
+        this.touchInput.wellDragId = null;
+        this.touchInput.wellDragSource = null;
+        this.touchInput.wellPreviewActive = false;
+        this.touchInput.wellCancel = false;
       }
-      const knob = document.getElementById('touch-joy-knob');
-      if (knob) knob.style.transform = 'translate(0px, 0px)';
+      if (this.touchEls) {
+        if (this.touchEls.joyKnob) this.touchEls.joyKnob.style.transform = 'translate(0px, 0px)';
+        if (this.touchEls.aimKnob) this.touchEls.aimKnob.style.transform = 'translate(0px, 0px)';
+        if (this.touchEls.joyBase) {
+          this.touchEls.joyBase.classList.remove('active');
+          this.touchEls.joyBase.style.left = '';
+          this.touchEls.joyBase.style.top = '';
+          this.touchEls.joyBase.style.bottom = '';
+        }
+        if (this.touchEls.aimBase) this.touchEls.aimBase.classList.remove('active');
+      }
+      document.querySelectorAll('.touch-btn.pressed').forEach(btn => btn.classList.remove('pressed'));
     }
 
     findNearestEnemy(x, y) {
@@ -245,134 +347,377 @@ window.SG = window.SG || {};
     }
 
     bindTouchControls() {
-      const joyZone = document.getElementById('touch-joy-zone');
-      const joyKnob = document.getElementById('touch-joy-knob');
-      const maxR = 42;
+      const te = this.touchEls || {};
+      const joyZone = te.joyZone;
+      const joyBase = te.joyBase;
+      const joyKnob = te.joyKnob;
+      const aimZone = te.aimZone;
+      const aimBase = te.aimBase;
+      const aimKnob = te.aimKnob;
 
-      if (joyZone && joyKnob) {
+      const acceptsTouchPointer = (e) => e.pointerType !== 'mouse' || this.settings.touchMode === 'on';
+      const tryLandscapeLock = () => {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(() => {});
+        }
+      };
+
+      // 1. Left Movement Joystick (floating or fixed)
+      if (joyZone && joyBase && joyKnob) {
         const updateJoy = (clientX, clientY) => {
+          const maxR = this.touchInput.joyMaxR || 46;
           const dx = clientX - this.touchInput.joyOriginX;
           const dy = clientY - this.touchInput.joyOriginY;
-          const d = Math.hypot(dx, dy) || 1;
+          const d = Math.hypot(dx, dy);
           const clamped = Math.min(maxR, d);
-          const nx = (dx / d) * (clamped / maxR);
-          const ny = (dy / d) * (clamped / maxR);
-          this.touchInput.moveX = nx;
-          this.touchInput.moveY = ny;
-          joyKnob.style.transform = `translate(${Math.round(nx * maxR)}px, ${Math.round(ny * maxR)}px)`;
+          const norm = maxR > 0 ? clamped / maxR : 0;
+          if (norm < 0.06 || d === 0) {
+            this.touchInput.moveX = 0;
+            this.touchInput.moveY = 0;
+            joyKnob.style.transform = 'translate(0px, 0px)';
+            return;
+          }
+          const ux = dx / d;
+          const uy = dy / d;
+          this.touchInput.moveX = ux * norm;
+          this.touchInput.moveY = uy * norm;
+          joyKnob.style.transform = `translate(${Math.round(ux * clamped)}px, ${Math.round(uy * clamped)}px)`;
         };
 
-        joyZone.addEventListener('touchstart', (e) => {
+        joyZone.addEventListener('pointerdown', (e) => {
+          if (!acceptsTouchPointer(e) || this.touchInput.joyId !== null) return;
           e.preventDefault();
+          e.stopPropagation();
+          this._lastTouchTime = performance.now();
           this.audio.init();
-          if (this.touchInput.joyId !== null) return;
-          const t = e.changedTouches[0];
-          if (!t) return;
-          this.touchInput.joyId = t.identifier;
-          const rect = joyZone.getBoundingClientRect();
-          this.touchInput.joyOriginX = rect.left + rect.width * 0.5;
-          this.touchInput.joyOriginY = rect.top + rect.height * 0.5;
-          updateJoy(t.clientX, t.clientY);
-        }, { passive: false });
+          try { joyZone.setPointerCapture(e.pointerId); } catch (_) {}
+          this.touchInput.joyId = e.pointerId;
 
-        joyZone.addEventListener('touchmove', (e) => {
-          e.preventDefault();
-          for (let i = 0; i < e.changedTouches.length; i++) {
-            const t = e.changedTouches[i];
-            if (t.identifier === this.touchInput.joyId) {
-              updateJoy(t.clientX, t.clientY);
-              break;
-            }
+          const baseRect = joyBase.getBoundingClientRect();
+          const maxR = Math.max(28, baseRect.width * 0.42);
+          this.touchInput.joyMaxR = maxR;
+
+          if (this.settings.touchFloating) {
+            const zoneRect = joyZone.getBoundingClientRect();
+            const halfW = baseRect.width * 0.5;
+            const halfH = baseRect.height * 0.5;
+            const minX = zoneRect.left + halfW;
+            const maxX = Math.max(minX, zoneRect.right - halfW);
+            const minY = zoneRect.top + halfH;
+            const maxY = Math.max(minY, zoneRect.bottom - halfH);
+            const cx = Math.max(minX, Math.min(maxX, e.clientX));
+            const cy = Math.max(minY, Math.min(maxY, e.clientY));
+            joyBase.style.left = `${Math.round(cx - zoneRect.left - halfW)}px`;
+            joyBase.style.top = `${Math.round(cy - zoneRect.top - halfH)}px`;
+            joyBase.style.bottom = 'auto';
+            this.touchInput.joyOriginX = cx;
+            this.touchInput.joyOriginY = cy;
+          } else {
+            this.touchInput.joyOriginX = baseRect.left + baseRect.width * 0.5;
+            this.touchInput.joyOriginY = baseRect.top + baseRect.height * 0.5;
           }
-        }, { passive: false });
+
+          joyBase.classList.add('active');
+          updateJoy(e.clientX, e.clientY);
+        });
+
+        joyZone.addEventListener('pointermove', (e) => {
+          if (e.pointerId !== this.touchInput.joyId) return;
+          e.preventDefault();
+          updateJoy(e.clientX, e.clientY);
+        });
 
         const endJoy = (e) => {
-          for (let i = 0; i < e.changedTouches.length; i++) {
-            if (e.changedTouches[i].identifier === this.touchInput.joyId) {
-              this.touchInput.joyId = null;
-              this.touchInput.moveX = 0;
-              this.touchInput.moveY = 0;
-              joyKnob.style.transform = 'translate(0px, 0px)';
-              break;
+          if (e.pointerId !== this.touchInput.joyId) return;
+          this.touchInput.joyId = null;
+          this.touchInput.moveX = 0;
+          this.touchInput.moveY = 0;
+          joyKnob.style.transform = 'translate(0px, 0px)';
+          joyBase.classList.remove('active');
+          joyBase.style.left = '';
+          joyBase.style.top = '';
+          joyBase.style.bottom = '';
+        };
+        joyZone.addEventListener('pointerup', endJoy);
+        joyZone.addEventListener('pointercancel', endJoy);
+      }
+
+      // 2. Right Twin-Stick Aim + Fire
+      if (aimZone && aimBase && aimKnob) {
+        const updateAim = (clientX, clientY) => {
+          const maxR = this.touchInput.aimMaxR || 46;
+          const dx = clientX - this.touchInput.aimOriginX;
+          const dy = clientY - this.touchInput.aimOriginY;
+          const d = Math.hypot(dx, dy);
+          const clamped = Math.min(maxR, d);
+          if (d > 0) {
+            const ux = dx / d;
+            const uy = dy / d;
+            aimKnob.style.transform = `translate(${Math.round(ux * clamped)}px, ${Math.round(uy * clamped)}px)`;
+            if (d > 6) {
+              this.touchInput.aimDirX = ux;
+              this.touchInput.aimDirY = uy;
+              this.touchInput.aimHasDir = true;
             }
           }
         };
-        joyZone.addEventListener('touchend', endJoy);
-        joyZone.addEventListener('touchcancel', endJoy);
+
+        aimZone.addEventListener('pointerdown', (e) => {
+          if (!acceptsTouchPointer(e) || this.touchInput.aimId !== null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          this._lastTouchTime = performance.now();
+          this.audio.init();
+          try { aimZone.setPointerCapture(e.pointerId); } catch (_) {}
+
+          const baseRect = aimBase.getBoundingClientRect();
+          this.touchInput.aimId = e.pointerId;
+          this.touchInput.aimOriginX = baseRect.left + baseRect.width * 0.5;
+          this.touchInput.aimOriginY = baseRect.top + baseRect.height * 0.5;
+          this.touchInput.aimMaxR = Math.max(28, baseRect.width * 0.42);
+          this.touchInput.aimActive = true;
+          this.touchInput.firing = true;
+          aimBase.classList.add('active');
+          updateAim(e.clientX, e.clientY);
+        });
+
+        aimZone.addEventListener('pointermove', (e) => {
+          if (e.pointerId !== this.touchInput.aimId) return;
+          e.preventDefault();
+          updateAim(e.clientX, e.clientY);
+        });
+
+        const endAim = (e) => {
+          if (e.pointerId !== this.touchInput.aimId) return;
+          this.touchInput.aimId = null;
+          this.touchInput.aimActive = false;
+          this.touchInput.firing = false;
+          aimKnob.style.transform = 'translate(0px, 0px)';
+          aimBase.classList.remove('active');
+        };
+        aimZone.addEventListener('pointerup', endAim);
+        aimZone.addEventListener('pointercancel', endAim);
       }
 
-      const bindHold = (id, prop) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('touchstart', (e) => {
-          e.preventDefault();
-          this.audio.init();
-          this.touchInput[prop] = true;
-          el.classList.add('pressed');
-        }, { passive: false });
-        const rel = (e) => {
-          e.preventDefault();
-          this.touchInput[prop] = false;
-          el.classList.remove('pressed');
+      // 3. Gravity Well Skillshot Button (tap = ahead of ship, drag = aim placement)
+      const wellBtn = te.well && te.well.el;
+      if (wellBtn) {
+        const updateWellBtnDrag = (clientX, clientY) => {
+          const dx = clientX - this.touchInput.wellStartX;
+          const dy = clientY - this.touchInput.wellStartY;
+          const d = Math.hypot(dx, dy);
+          if (!this.touchInput.wellPreviewActive && d > 14) {
+            this.touchInput.wellPreviewActive = true;
+          }
+          if (this.touchInput.wellPreviewActive) {
+            this.touchInput.wellCancel = d < 12;
+            const range = Math.min(380, d * 3.6);
+            const ux = d > 0 ? dx / d : Math.cos(this.player.aimAngle);
+            const uy = d > 0 ? dy / d : Math.sin(this.player.aimAngle);
+            this.touchInput.wellPreviewX = Math.max(28, Math.min(this.bounds.width - 28, this.player.x + ux * range));
+            this.touchInput.wellPreviewY = Math.max(28, Math.min(this.bounds.height - 28, this.player.y + uy * range));
+          }
         };
-        el.addEventListener('touchend', rel, { passive: false });
-        el.addEventListener('touchcancel', rel, { passive: false });
-      };
-      bindHold('touch-fire', 'firing');
-      bindHold('touch-bt', 'bulletTime');
 
-      const bindTap = (id, fn) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('touchstart', (e) => {
+        wellBtn.addEventListener('pointerdown', (e) => {
+          if (!acceptsTouchPointer(e) || this.touchInput.wellDragId !== null) return;
           e.preventDefault();
+          e.stopPropagation();
+          this._lastTouchTime = performance.now();
           this.audio.init();
+          try { wellBtn.setPointerCapture(e.pointerId); } catch (_) {}
+          this.touchInput.wellDragId = e.pointerId;
+          this.touchInput.wellDragSource = 'btn';
+          this.touchInput.wellStartX = e.clientX;
+          this.touchInput.wellStartY = e.clientY;
+          this.touchInput.wellPreviewActive = false;
+          this.touchInput.wellCancel = false;
+          wellBtn.classList.add('pressed');
+        });
+
+        wellBtn.addEventListener('pointermove', (e) => {
+          if (e.pointerId !== this.touchInput.wellDragId || this.touchInput.wellDragSource !== 'btn') return;
+          e.preventDefault();
+          updateWellBtnDrag(e.clientX, e.clientY);
+        });
+
+        const endWellBtn = (e) => {
+          if (e.pointerId !== this.touchInput.wellDragId || this.touchInput.wellDragSource !== 'btn') return;
+          wellBtn.classList.remove('pressed');
+          if (e.type === 'pointerup' && this.state === 'playing') {
+            if (this.touchInput.wellPreviewActive) {
+              if (!this.touchInput.wellCancel) {
+                if (this.spawnGravityWell(this.touchInput.wellPreviewX, this.touchInput.wellPreviewY, this.repulsorMode)) {
+                  this.vibrate(15);
+                }
+              }
+            } else {
+              const wx = Math.max(28, Math.min(this.bounds.width - 28, this.player.x + Math.cos(this.player.aimAngle) * 195));
+              const wy = Math.max(28, Math.min(this.bounds.height - 28, this.player.y + Math.sin(this.player.aimAngle) * 195));
+              if (this.spawnGravityWell(wx, wy, this.repulsorMode)) {
+                this.vibrate(15);
+              }
+            }
+          }
+          this.touchInput.wellDragId = null;
+          this.touchInput.wellDragSource = null;
+          this.touchInput.wellPreviewActive = false;
+          this.touchInput.wellCancel = false;
+        };
+        wellBtn.addEventListener('pointerup', endWellBtn);
+        wellBtn.addEventListener('pointercancel', endWellBtn);
+      }
+
+      // 4. Smart Toggle / Hold Chrono Bullet-Time
+      const btBtn = te.bt && te.bt.el;
+      if (btBtn) {
+        btBtn.addEventListener('pointerdown', (e) => {
+          if (!acceptsTouchPointer(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          this._lastTouchTime = performance.now();
+          this.audio.init();
+          try { btBtn.setPointerCapture(e.pointerId); } catch (_) {}
+          this.touchInput.btId = e.pointerId;
+          this.touchInput.btWasOn = this.touchInput.bulletTime;
+          this.touchInput.btPressTime = performance.now();
+          this.touchInput.bulletTime = true;
+          btBtn.classList.add('pressed');
+          this.updateHUD();
+        });
+
+        const endBt = (e) => {
+          if (e.pointerId !== this.touchInput.btId) return;
+          this.touchInput.btId = null;
+          btBtn.classList.remove('pressed');
+          if (e.type === 'pointercancel') {
+            this.touchInput.bulletTime = false;
+          } else if (this.touchInput.btWasOn || (performance.now() - this.touchInput.btPressTime >= 350)) {
+            this.touchInput.bulletTime = false;
+          }
+          this.updateHUD();
+        };
+        btBtn.addEventListener('pointerup', endBt);
+        btBtn.addEventListener('pointercancel', endBt);
+      }
+
+      // 5. Instant Tap Abilities (Dash, Detonate, Rewind, Polarity)
+      const bindTap = (btnRef, fn) => {
+        const el = btnRef && btnRef.el;
+        if (!el) return;
+        el.addEventListener('pointerdown', (e) => {
+          if (!acceptsTouchPointer(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          this._lastTouchTime = performance.now();
+          this.audio.init();
+          el.classList.add('pressed');
           if (this.state === 'playing') fn();
-        }, { passive: false });
+        });
+        const rel = () => el.classList.remove('pressed');
+        el.addEventListener('pointerup', rel);
+        el.addEventListener('pointercancel', rel);
       };
 
-      bindTap('touch-dash', () => {
-        this.player.triggerDash(this.touchInput.moveX, this.touchInput.moveY, this.bounds, this.particles, this.audio, this.grid, this);
+      bindTap(te.dash, () => {
+        if (this.player.triggerDash(this.touchInput.moveX, this.touchInput.moveY, this.bounds, this.particles, this.audio, this.grid, this)) {
+          this.vibrate(12);
+        }
       });
-      bindTap('touch-well', () => {
-        const wx = this.player.x + Math.cos(this.player.aimAngle) * 180;
-        const wy = this.player.y + Math.sin(this.player.aimAngle) * 180;
-        this.spawnGravityWell(wx, wy, this.repulsorMode);
+      bindTap(te.detonate, () => {
+        if (this.detonateAllWells()) {
+          this.vibrate(25);
+        }
       });
-      bindTap('touch-detonate', () => this.detonateAllWells());
-      bindTap('touch-rewind', () => this.player.triggerRewind(this.particles, this.audio, this.grid, this));
-      bindTap('touch-polarity', () => {
+      bindTap(te.rewind, () => {
+        if (this.player.triggerRewind(this.particles, this.audio, this.grid, this)) {
+          this.vibrate(18);
+        }
+      });
+      bindTap(te.polarity, () => {
         this.repulsorMode = !this.repulsorMode;
+        this.particles.addText(
+          this.player.x,
+          this.player.y - 26,
+          this.repulsorMode ? 'БЕЛАЯ ДЫРА' : 'ЧЕРНАЯ ДЫРА',
+          this.repulsorMode ? '#ffb838' : '#c06cff',
+          1.02
+        );
+        this.vibrate(10);
         this.updateHUD();
       });
 
-      // Tap / drag on canvas to aim & place gravity wells directly
+      // 6. Open Arena Tap/Drag to place Gravity Well directly
       if (this.canvas) {
-        this.canvas.addEventListener('touchstart', (e) => {
-          if (this.state !== 'playing') return;
-          const t = e.changedTouches[0];
-          if (!t) return;
-          e.preventDefault();
-          this.audio.init();
-          if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock('landscape').catch(() => {});
-          }
+        const updateCanvasWell = (clientX, clientY) => {
           const rect = this.canvas.getBoundingClientRect();
-          const x = t.clientX - rect.left;
-          const y = t.clientY - rect.top;
-          this.mouse.x = x;
-          this.mouse.y = y;
-          this.spawnGravityWell(x, y, this.repulsorMode);
-        }, { passive: false });
+          this.touchInput.wellPreviewX = Math.max(28, Math.min(this.bounds.width - 28, clientX - rect.left));
+          this.touchInput.wellPreviewY = Math.max(28, Math.min(this.bounds.height - 28, clientY - rect.top));
+        };
 
-        this.canvas.addEventListener('touchmove', (e) => {
-          if (this.state !== 'playing') return;
-          const t = e.changedTouches[0];
-          if (!t) return;
-          const rect = this.canvas.getBoundingClientRect();
-          this.mouse.x = t.clientX - rect.left;
-          this.mouse.y = t.clientY - rect.top;
-        }, { passive: true });
+        this.canvas.addEventListener('pointerdown', (e) => {
+          if (e.pointerType === 'mouse') return;
+          if (this.state !== 'playing' || !this.settings.touchCanvasWell || this.touchInput.wellDragId !== null) return;
+          e.preventDefault();
+          this._lastTouchTime = performance.now();
+          this.audio.init();
+          tryLandscapeLock();
+          try { this.canvas.setPointerCapture(e.pointerId); } catch (_) {}
+          this.touchInput.wellDragId = e.pointerId;
+          this.touchInput.wellDragSource = 'canvas';
+          this.touchInput.wellPreviewActive = true;
+          this.touchInput.wellCancel = false;
+          updateCanvasWell(e.clientX, e.clientY);
+        });
+
+        this.canvas.addEventListener('pointermove', (e) => {
+          if (e.pointerId !== this.touchInput.wellDragId || this.touchInput.wellDragSource !== 'canvas') return;
+          e.preventDefault();
+          updateCanvasWell(e.clientX, e.clientY);
+        });
+
+        const endCanvasWell = (e) => {
+          if (e.pointerId !== this.touchInput.wellDragId || this.touchInput.wellDragSource !== 'canvas') return;
+          if (e.type === 'pointerup' && this.state === 'playing') {
+            if (this.spawnGravityWell(this.touchInput.wellPreviewX, this.touchInput.wellPreviewY, this.repulsorMode)) {
+              this.vibrate(15);
+            }
+          }
+          this.touchInput.wellDragId = null;
+          this.touchInput.wellDragSource = null;
+          this.touchInput.wellPreviewActive = false;
+          this.touchInput.wellCancel = false;
+        };
+        this.canvas.addEventListener('pointerup', endCanvasWell);
+        this.canvas.addEventListener('pointercancel', endCanvasWell);
+      }
+
+      // 7. Fullscreen Toggle & Portrait Dismiss
+      const fsBtn = (this.hudEls && this.hudEls.fullscreenBtn) || document.getElementById('btn-hud-fullscreen');
+      if (fsBtn) {
+        if (!document.documentElement.requestFullscreen) {
+          fsBtn.hidden = true;
+        } else {
+          fsBtn.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(() => {});
+            } else {
+              document.documentElement.requestFullscreen().then(tryLandscapeLock).catch(() => {});
+            }
+          });
+          document.addEventListener('fullscreenchange', () => {
+            const active = !!document.fullscreenElement;
+            fsBtn.textContent = active ? '✕' : '⛶';
+            fsBtn.classList.toggle('active', active);
+          });
+        }
+      }
+
+      const dismissRotBtn = document.getElementById('btn-dismiss-rotate');
+      if (dismissRotBtn) {
+        dismissRotBtn.addEventListener('click', () => {
+          document.body.classList.add('allow-portrait');
+        });
       }
     }
 
@@ -390,6 +735,9 @@ window.SG = window.SG || {};
     }
 
     resetRun(startImmediately = true) {
+      clearTimeout(this._aiUpgradeTimer);
+      this._aiUpgradeTimer = null;
+      this.cancelUpgradeAnim();
       this.player = new SG.Player(this.bounds.width * 0.5, this.bounds.height * 0.5);
       this.wells = [];
       this.enemies = [];
@@ -410,7 +758,7 @@ window.SG = window.SG || {};
 
       this.level = 1;
       this.xp = 0;
-      this.xpNext = 55;
+      this.xpNext = 115;
       this.upgradeStacks = {};
       this.evolvedUpgrades = new Set();
       this.currentChoices = [];
@@ -438,7 +786,23 @@ window.SG = window.SG || {};
       this.updateHUD();
     }
 
+    cancelUpgradeAnim() {
+      clearTimeout(this._upgradeAnimTimer);
+      clearTimeout(this._upgradeCloseTimer);
+      this._upgradeAnimTimer = null;
+      this._upgradeCloseTimer = null;
+      this._upgradeSelecting = false;
+      const dlg = document.getElementById('upgrade-dialog');
+      if (dlg) dlg.classList.remove('is-closing');
+    }
+
+    shouldAnimateUpgradeUI() {
+      const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      return this.settings.quality !== 'low' && !reduced;
+    }
+
     closeAllDialogs() {
+      this.cancelUpgradeAnim();
       this._suppressResumeOnClose = true;
       try {
         ['title-dialog', 'pause-dialog', 'settings-dialog', 'upgrade-dialog', 'codex-dialog', 'modules-dialog', 'gameover-dialog'].forEach(id => {
@@ -485,6 +849,10 @@ window.SG = window.SG || {};
       const shakeCb = document.getElementById('set-shake');
       const trajCb = document.getElementById('set-trajectory');
       const telCb = document.getElementById('set-telemetry');
+      const touchModeSel = document.getElementById('set-touch-mode');
+      const touchFloatCb = document.getElementById('set-touch-floating');
+      const touchAutoCb = document.getElementById('set-touch-autofire');
+      const touchCanvasWellCb = document.getElementById('set-touch-canvas-well');
       const touchScaleSlider = document.getElementById('set-touch-scale');
       const touchScaleVal = document.getElementById('val-touch-scale');
       const touchOpacitySlider = document.getElementById('set-touch-opacity');
@@ -503,10 +871,14 @@ window.SG = window.SG || {};
       if (shakeCb) shakeCb.checked = !!this.settings.screenShake;
       if (trajCb) trajCb.checked = !!this.settings.trajectoryPreview;
       if (telCb) telCb.checked = !!this.settings.aiTelemetry;
-      if (touchScaleSlider) touchScaleSlider.value = String(this.settings.touchScale || 115);
-      if (touchScaleVal) touchScaleVal.textContent = `${this.settings.touchScale || 115}%`;
-      if (touchOpacitySlider) touchOpacitySlider.value = String(this.settings.touchOpacity || 85);
-      if (touchOpacityVal) touchOpacityVal.textContent = `${this.settings.touchOpacity || 85}%`;
+      if (touchModeSel) touchModeSel.value = this.settings.touchMode || 'auto';
+      if (touchFloatCb) touchFloatCb.checked = !!this.settings.touchFloating;
+      if (touchAutoCb) touchAutoCb.checked = !!this.settings.touchAutofire;
+      if (touchCanvasWellCb) touchCanvasWellCb.checked = !!this.settings.touchCanvasWell;
+      if (touchScaleSlider) touchScaleSlider.value = String(this.settings.touchScale || 100);
+      if (touchScaleVal) touchScaleVal.textContent = `${this.settings.touchScale || 100}%`;
+      if (touchOpacitySlider) touchOpacitySlider.value = String(this.settings.touchOpacity || 80);
+      if (touchOpacityVal) touchOpacityVal.textContent = `${this.settings.touchOpacity || 80}%`;
       this.updateQualityUI();
     }
 
@@ -523,6 +895,11 @@ window.SG = window.SG || {};
         this.gpu.resize(this.bounds.width, this.bounds.height, this.dpr);
       }
       this.grid.resize(this.bounds.width, this.bounds.height);
+      if (this.player) {
+        const pad = this.player.radius + 8;
+        this.player.x = Math.max(pad, Math.min(this.bounds.width - pad, this.player.x));
+        this.player.y = Math.max(pad, Math.min(this.bounds.height - pad, this.player.y));
+      }
 
       // Cache 2D fallback gradients on resize so render() allocates zero gradients per frame
       const w = this.bounds.width;
@@ -539,11 +916,16 @@ window.SG = window.SG || {};
 
     bindEvents() {
       window.addEventListener('resize', () => this.handleResize());
+      window.addEventListener('orientationchange', () => setTimeout(() => this.handleResize(), 120));
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => this.handleResize());
+      }
 
       window.addEventListener('touchstart', () => {
         this._lastTouchTime = performance.now();
-        if (!this.isTouchDevice) {
-          this.isTouchDevice = true;
+        if (!this._detectedTouch) {
+          this._detectedTouch = true;
+          this.syncTouchMode();
           this.updateHUD();
         }
       }, { passive: true });
@@ -552,14 +934,16 @@ window.SG = window.SG || {};
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
           return;
         }
-        if (this.isTouchDevice) {
+        if (this.settings.touchMode === 'auto' && this.isTouchDevice) {
           this.isTouchDevice = false;
+          if (document.body && document.body.classList) document.body.classList.remove('is-touch');
           this.updateHUD();
         }
         this.keys[e.code] = true;
 
         // Upgrade card hotkeys 1, 2, 3, 4 and R for reroll
         if (this.state === 'upgrade') {
+          if (e.repeat || this._upgradeSelecting) return;
           if (e.code === 'Digit1' && this.currentChoices[0]) this.selectUpgrade(this.currentChoices[0]);
           if (e.code === 'Digit2' && this.currentChoices[1]) this.selectUpgrade(this.currentChoices[1]);
           if (e.code === 'Digit3' && this.currentChoices[2]) this.selectUpgrade(this.currentChoices[2]);
@@ -613,11 +997,13 @@ window.SG = window.SG || {};
       });
 
       this.canvas.addEventListener('mousemove', (e) => {
+        if (performance.now() - this._lastTouchTime < 700) return;
         this.mouse.x = e.clientX;
         this.mouse.y = e.clientY;
       });
 
       this.canvas.addEventListener('mousedown', (e) => {
+        if (performance.now() - this._lastTouchTime < 700) return;
         this.audio.init();
         this.mouse.x = e.clientX;
         this.mouse.y = e.clientY;
@@ -633,6 +1019,7 @@ window.SG = window.SG || {};
       });
 
       window.addEventListener('mouseup', (e) => {
+        if (performance.now() - this._lastTouchTime < 700) return;
         if (e.button === 0) this.mouse.leftDown = false;
       });
 
@@ -661,6 +1048,7 @@ window.SG = window.SG || {};
           this.openPauseMenu();
         } else if (origin === 'playing') {
           this.state = 'playing';
+          this.updateHUD();
         }
       };
 
@@ -678,6 +1066,7 @@ window.SG = window.SG || {};
         pauseDlg.addEventListener('close', () => {
           if (!this._suppressResumeOnClose && this.state === 'paused') {
             this.state = 'playing';
+            this.updateHUD();
           }
         });
       }
@@ -862,6 +1251,40 @@ window.SG = window.SG || {};
         });
       }
 
+      const touchModeSel = document.getElementById('set-touch-mode');
+      if (touchModeSel) {
+        touchModeSel.addEventListener('change', () => {
+          this.settings.touchMode = touchModeSel.value;
+          this.applySettings();
+          this.saveSettings();
+          this.updateHUD();
+        });
+      }
+
+      const touchFloatCb = document.getElementById('set-touch-floating');
+      if (touchFloatCb) {
+        touchFloatCb.addEventListener('change', () => {
+          this.settings.touchFloating = touchFloatCb.checked;
+          this.saveSettings();
+        });
+      }
+
+      const touchAutoCb = document.getElementById('set-touch-autofire');
+      if (touchAutoCb) {
+        touchAutoCb.addEventListener('change', () => {
+          this.settings.touchAutofire = touchAutoCb.checked;
+          this.saveSettings();
+        });
+      }
+
+      const touchCanvasWellCb = document.getElementById('set-touch-canvas-well');
+      if (touchCanvasWellCb) {
+        touchCanvasWellCb.addEventListener('change', () => {
+          this.settings.touchCanvasWell = touchCanvasWellCb.checked;
+          this.saveSettings();
+        });
+      }
+
       const touchScaleSlider = document.getElementById('set-touch-scale');
       if (touchScaleSlider) {
         touchScaleSlider.addEventListener('input', () => {
@@ -988,6 +1411,9 @@ window.SG = window.SG || {};
     }
 
     openMainMenu() {
+      clearTimeout(this._aiUpgradeTimer);
+      this._aiUpgradeTimer = null;
+      this.cancelUpgradeAnim();
       this.clearInputs();
       this._subModalOrigin = null;
       this.state = 'title';
@@ -1038,6 +1464,7 @@ window.SG = window.SG || {};
       if (this.state !== 'playing' && this.state !== 'paused') return;
       this.clearInputs();
       this.state = 'paused';
+      this.updateHUD();
       this.renderPauseSummary();
       const dlg = document.getElementById('pause-dialog');
       if (dlg && !dlg.open) dlg.showModal();
@@ -1049,6 +1476,7 @@ window.SG = window.SG || {};
         dlg.close();
       } else {
         this.state = 'playing';
+        this.updateHUD();
       }
     }
 
@@ -1065,7 +1493,10 @@ window.SG = window.SG || {};
           this._suppressResumeOnClose = false;
         }
       }
-      if (origin === 'playing') this.state = 'paused';
+      if (origin === 'playing') {
+        this.state = 'paused';
+        this.updateHUD();
+      }
       this.syncSettingsUI();
       const dlg = document.getElementById('settings-dialog');
       if (dlg && !dlg.open) dlg.showModal();
@@ -1084,9 +1515,8 @@ window.SG = window.SG || {};
     }
 
     toggleMute() {
-      const muted = this.audio.toggleMute();
-      const btn = document.getElementById('btn-hud-mute');
-      if (btn) btn.textContent = muted ? 'Звук: ВЫКЛ' : 'Звук: ВКЛ';
+      this.audio.toggleMute();
+      this.updateHUD();
     }
 
     openSubModal(dialogId, origin = 'playing') {
@@ -1102,7 +1532,10 @@ window.SG = window.SG || {};
           this._suppressResumeOnClose = false;
         }
       }
-      if (this.state === 'playing') this.state = 'paused';
+      if (this.state === 'playing') {
+        this.state = 'paused';
+        this.updateHUD();
+      }
       const dlg = document.getElementById(dialogId);
       if (dlg && !dlg.open) dlg.showModal();
     }
@@ -1421,9 +1854,27 @@ window.SG = window.SG || {};
       }
     }
 
-    spawnBullet(opts) {
+    computeWaveScaling(waveNum) {
       const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
-      const dmg = opts.fromPlayer ? opts.damage : Math.max(1, Math.round((opts.damage || 10) * (diffCfg.dmgScale || 1.0)));
+      const w = Math.max(1, waveNum || 1);
+      const linearPart = 1 + (w - 1) * 0.28;
+      const expPart = w <= 3 ? 1.0 : Math.pow(1.135, w - 3);
+      const evoCount = this.evolvedUpgrades ? this.evolvedUpgrades.size : 0;
+      const levelFactor = 1 + Math.max(0, (this.level || 1) - 4) * 0.065 + evoCount * 0.16;
+      const hpScale = linearPart * expPart * levelFactor * diffCfg.enemyScale;
+      const bossScale = hpScale * Math.min(1.15, 0.72 + w * 0.015);
+      return { hpScale, bossScale };
+    }
+
+    getEnemyDamageScale() {
+      const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
+      const w = Math.max(1, this.wave || 1);
+      const waveDmg = 1 + (w - 1) * 0.10 + Math.pow(Math.max(0, w - 8), 1.25) * 0.04;
+      return (diffCfg.dmgScale || 1.0) * waveDmg;
+    }
+
+    spawnBullet(opts) {
+      const dmg = opts.fromPlayer ? opts.damage : Math.max(1, Math.round((opts.damage || 10) * this.getEnemyDamageScale()));
       this.bullets.push({
         x: opts.x,
         y: opts.y,
@@ -1435,6 +1886,7 @@ window.SG = window.SG || {};
         color: opts.color || '#00f0ff',
         fromPlayer: !!opts.fromPlayer,
         isCrit: !!opts.isCrit,
+        isLance: !!opts.isLance,
         hijacked: false,
         curved: false,
         slingshotBoosted: false,
@@ -1550,22 +2002,22 @@ window.SG = window.SG || {};
         }
       }
 
-      const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
-      const scale = (1 + (waveNum - 1) * 0.22) * diffCfg.enemyScale;
+      const { hpScale, bossScale } = this.computeWaveScaling(waveNum);
+      const eliteChance = Math.min(0.45, Math.max(0, (waveNum - 3) * 0.045));
       const isBossWave = waveNum % 5 === 0;
 
       if (isBossWave) {
         const bossType = (waveNum % 10 === 0) ? 'boss_archon' : 'boss_leviathan';
         this.waveSubtitle = `ТРЕВОГА // ${SG.ENEMY_TYPES[bossType].name}`;
-        const bossScale = scale * (1 + Math.max(0, waveNum - 5) * 0.14) * (1 + Math.max(0, this.level - 5) * 0.08);
-        this.waveQueue.push({ type: bossType, scale: bossScale });
+        this.waveQueue.push({ type: bossType, scale: bossScale, wave: waveNum, isElite: false });
         const escortCount = 5 + Math.floor(waveNum * 0.7);
         for (let i = 0; i < escortCount; i++) {
           let eType = i % 2 === 0 ? 'swarmer' : 'sniper';
           if (i % 5 === 1 && waveNum >= 5) eType = 'phalanx';
           else if (i % 5 === 3 && waveNum >= 10) eType = 'weaver';
           else if (i % 4 === 2 && waveNum >= 5) eType = 'pulsar';
-          this.waveQueue.push({ type: eType, scale });
+          const isElite = waveNum >= 10 && Math.random() < eliteChance * 0.65;
+          this.waveQueue.push({ type: eType, scale: hpScale, wave: waveNum, isElite });
         }
         this.audio.playBossAlarm();
         this.particles.addText(
@@ -1585,7 +2037,10 @@ window.SG = window.SG || {};
           'КРИТИЧЕСКАЯ ПЛОТНОСТЬ'
         ];
         this.waveSubtitle = subtitles[(waveNum - 1) % subtitles.length];
-        const budget = 6 + waveNum * 3;
+        const budget = Math.min(110, 6 + waveNum * 3 + Math.floor(Math.max(0, waveNum - 6) * 1.5));
+        const minElites = waveNum >= 6 ? Math.min(6, Math.floor((waveNum - 4) / 2)) : 0;
+        let elitesAssigned = 0;
+        const elitePool = ['phalanx', 'pulsar', 'weaver', 'sniper', 'swarmer'];
         for (let i = 0; i < budget; i++) {
           let type = 'swarmer';
           const r = Math.random();
@@ -1593,7 +2048,20 @@ window.SG = window.SG || {};
           else if (waveNum >= 3 && r < 0.34) type = 'pulsar';
           else if (waveNum >= 2 && r < 0.52) type = 'phalanx';
           else if (waveNum >= 1 && r < 0.72 && i % 3 === 0) type = 'sniper';
-          this.waveQueue.push({ type, scale });
+
+          let isElite = false;
+          const remaining = budget - i;
+          if (elitesAssigned < minElites && (remaining <= (minElites - elitesAssigned) || (i % Math.max(2, Math.floor(budget / minElites)) === 1))) {
+            isElite = true;
+            if (type === 'swarmer' && waveNum >= 4) {
+              type = elitePool[elitesAssigned % elitePool.length];
+            }
+          } else if (Math.random() < eliteChance) {
+            isElite = true;
+          }
+          if (isElite) elitesAssigned++;
+
+          this.waveQueue.push({ type, scale: hpScale, wave: waveNum, isElite });
         }
       }
       this.waveSpawnTimer = 0.25;
@@ -1615,27 +2083,36 @@ window.SG = window.SG || {};
         if (Math.hypot(x - this.player.x, y - this.player.y) > 240) break;
       }
 
-      const enemy = SG.createEnemy(item.type, x, y, item.scale);
+      const enemy = SG.createEnemy(item.type, x, y, item.scale, {
+        wave: item.wave || this.wave,
+        isElite: !!item.isElite
+      });
       enemy.uid = Math.random().toString(36).slice(2);
       this.enemies.push(enemy);
-      this.particles.addShockwave(x, y, enemy.isBoss ? 110 : 42, enemy.color, 0.35, 2);
+      if (enemy.isElite) {
+        this.particles.addShockwave(x, y, 64, '#ffd166', 0.4, 2.4);
+      } else {
+        this.particles.addShockwave(x, y, enemy.isBoss ? 110 : 42, enemy.color, 0.35, 2);
+      }
     }
 
     spawnBossEscort(boss, phase) {
-      if (this.enemies.length >= 18) return;
-      const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
-      const scale = (1 + Math.max(0, this.wave - 1) * 0.17) * diffCfg.enemyScale;
+      if (this.enemies.length >= 22) return;
+      const { hpScale } = this.computeWaveScaling(this.wave);
       const count = phase >= 3 ? 3 : 2;
       const pool = phase >= 3 ? ['weaver', 'phalanx', 'sniper'] : ['sniper', 'phalanx'];
       for (let i = 0; i < count; i++) {
-        if (this.enemies.length >= 18) break;
+        if (this.enemies.length >= 22) break;
         const ang = (i * Math.PI * 2) / count + Math.random() * 0.5;
         const sx = Math.max(40, Math.min(this.bounds.width - 40, boss.x + Math.cos(ang) * 110));
         const sy = Math.max(40, Math.min(this.bounds.height - 40, boss.y + Math.sin(ang) * 110));
-        const escort = SG.createEnemy(pool[i % pool.length], sx, sy, scale);
+        const escort = SG.createEnemy(pool[i % pool.length], sx, sy, hpScale, {
+          wave: this.wave,
+          isElite: this.wave >= 10 && i === 0
+        });
         escort.uid = Math.random().toString(36).slice(2);
         this.enemies.push(escort);
-        this.particles.addShockwave(sx, sy, 48, escort.color, 0.3, 2);
+        this.particles.addShockwave(sx, sy, escort.isElite ? 64 : 48, escort.isElite ? '#ffd166' : escort.color, 0.3, 2);
       }
     }
 
@@ -1656,9 +2133,12 @@ window.SG = window.SG || {};
         this.particles.addText(e.x + (Math.random() - 0.5) * 14, e.y - e.radius - 4, `-${dmg}`, textColor, 0.92, 0.65);
       }
 
-      if (this.player.mods.executeThreshold > 0 && !e.isBoss && e.hp > 0 && (e.hp / e.maxHp) <= this.player.mods.executeThreshold) {
-        e.hp = 0;
-        this.particles.addText(e.x, e.y - e.radius - 16, 'КАЗНЬ!', '#ff3b6b', 1.05);
+      if (this.player.mods.executeThreshold > 0 && !e.isBoss && e.hp > 0) {
+        const effExec = e.isElite ? this.player.mods.executeThreshold * 0.5 : this.player.mods.executeThreshold;
+        if ((e.hp / e.maxHp) <= effExec) {
+          e.hp = 0;
+          this.particles.addText(e.x, e.y - e.radius - 16, 'КАЗНЬ!', '#ff3b6b', 1.05);
+        }
       }
 
       if (e.hp <= 0) {
@@ -1774,7 +2254,7 @@ window.SG = window.SG || {};
 
       // Crimson Stream (evoEntropyTether): bonus heal & shockwave when enemy dies in Entropy aura
       if (this.player.mods.evoEntropyTether > 0 && this.player.mods.entropyRadius > 0) {
-        const entR = this.player.mods.entropyRadius * (this.player.mods.auraRadiusMult || 1.0);
+        const entR = this.player.mods.entropyRadius * SG.getEffectiveAuraMult(this.player.mods.auraRadiusMult);
         if (Math.hypot(e.x - this.player.x, e.y - this.player.y) <= entR + e.radius) {
           const gained = Math.min(this.player.maxHp - this.player.hp, 6);
           this.player.hp += gained;
@@ -1787,7 +2267,7 @@ window.SG = window.SG || {};
       // Singularity Shards burst if enemy died in gravity well or near player aura
       if (this.player.mods.shardBurst > 0) {
         const p = this.player;
-        const rMult = p.mods.auraRadiusMult || 1.0;
+        const rMult = SG.getEffectiveAuraMult(p.mods.auraRadiusMult);
         const maxAuraR = Math.max(p.mods.coronaRadius, p.mods.stormRadius, p.mods.cryoRadius, p.mods.entropyRadius, p.mods.repulseRadius, p.mods.radRadius, p.mods.novaRadius) * rMult;
         const nearAura = maxAuraR > 0 && Math.hypot(e.x - p.x, e.y - p.y) <= maxAuraR + e.radius + 20;
         if (e.inGravityWell || nearAura) {
@@ -1823,7 +2303,7 @@ window.SG = window.SG || {};
       if (e.isBoss) this.addScreenShake(15);
 
       // Spawn XP Crystals & Repair Orbs
-      const crystalCount = e.isBoss ? 16 : Math.max(1, Math.round(e.xp / 14));
+      const crystalCount = e.isBoss ? 16 : Math.min(6, Math.max(1, Math.round(e.xp / 24)));
       const xpPer = e.xp / crystalCount;
       for (let i = 0; i < crystalCount; i++) {
         const a = Math.random() * Math.PI * 2;
@@ -1896,15 +2376,22 @@ window.SG = window.SG || {};
     }
 
     computeNextXp(level) {
-      return Math.round(55 + level * 26 + Math.pow(level, 1.38) * 7);
+      return Math.round(95 + level * 52 + Math.pow(level, 1.62) * 16);
     }
 
     checkLevelUp() {
       if (this.xp >= this.xpNext && this.state === 'playing') {
-        if (SG.rollUpgradeChoices(this.upgradeStacks, 1).length === 0) return;
         this.xp -= this.xpNext;
         this.level++;
         this.xpNext = this.computeNextXp(this.level);
+        if (SG.rollUpgradeChoices(this.upgradeStacks, 1, this.evolvedUpgrades).length === 0) {
+          this.player.hp = Math.min(this.player.maxHp, this.player.hp + 15);
+          this.player.shield = Math.min(this.player.maxShield, this.player.shield + 20);
+          this.player.mods.scoreMultBonus += 0.05;
+          this.particles.addText(this.player.x, this.player.y - 30, 'ВСЕ МОДУЛИ MAX • ПЕРЕГРУЗКА ЯДРА!', '#ffd166', 1.18, 1.4);
+          this.updateHUD();
+          return;
+        }
         this.openUpgradeModal();
       }
     }
@@ -1916,11 +2403,16 @@ window.SG = window.SG || {};
     }
 
     openUpgradeModal() {
-      this.currentChoices = SG.rollUpgradeChoices(this.upgradeStacks, 4);
+      clearTimeout(this._aiUpgradeTimer);
+      this._aiUpgradeTimer = null;
+      this.cancelUpgradeAnim();
+      this.currentChoices = SG.rollUpgradeChoices(this.upgradeStacks, 4, this.evolvedUpgrades);
       if (this.currentChoices.length === 0) return;
 
+      this.clearInputs();
+      this._upgradeGuardUntil = this.isTouchDevice ? performance.now() + 380 : 0;
       this.state = 'upgrade';
-      this.mouse.leftDown = false;
+      this.updateHUD();
       this.audio.playLevelUp();
 
       this.renderUpgradeChoices();
@@ -1930,10 +2422,13 @@ window.SG = window.SG || {};
 
       // If AI Autopilot is active, let the user glimpse the choice for 0.85s then auto-pick best synergy!
       if (this.autopilot.enabled) {
-        setTimeout(() => {
-          if (this.state === 'upgrade') {
+        this._aiUpgradeTimer = setTimeout(() => {
+          this._aiUpgradeTimer = null;
+          if (this.state === 'upgrade' && !this._upgradeSelecting) {
             const pick = this.autopilot.pickBestUpgrade(this.currentChoices, this.upgradeStacks);
-            if (pick) this.selectUpgrade(pick);
+            if (pick && this.currentChoices.includes(pick) && (this.upgradeStacks[pick.id] || 0) < pick.maxStacks) {
+              this.selectUpgrade(pick);
+            }
           }
         }, 850);
       }
@@ -1955,17 +2450,29 @@ window.SG = window.SG || {};
       const container = document.getElementById('upgrade-cards');
       container.innerHTML = '';
 
+      this.currentChoices = this.currentChoices.filter(
+        u => (this.upgradeStacks[u.id] || 0) < u.maxStacks && !this.evolvedUpgrades.has(u.id)
+      );
+
+      const anim = this.shouldAnimateUpgradeUI();
+
       this.currentChoices.forEach((upg, idx) => {
         const curStack = this.upgradeStacks[upg.id] || 0;
         const willEvolve = !!(upg.evolution && (curStack + 1) === upg.maxStacks);
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `upgrade-card rarity-${upg.rarity}${this.getTagClass(upg)}${willEvolve ? ' is-evolution' : ''}`;
+        btn.className = `upgrade-card rarity-${upg.rarity}${this.getTagClass(upg)}${willEvolve ? ' is-evolution' : ''}${anim ? ' anim-enter' : ''}`;
+        btn.style.setProperty('--card-idx', String(idx));
         const evoHtml = upg.evolution
           ? (willEvolve
             ? `<div class="upg-evo-box"><strong>АПЕКС-ЭВОЛЮЦИЯ: ${upg.evolution.title}</strong> — ${upg.evolution.perk}</div>`
             : `<div class="upg-evo-hint">Макс. ур.: ${upg.evolution.title}</div>`)
           : '';
+        const levelText = curStack === 0
+          ? `Новый: 0 → 1 / ${upg.maxStacks}`
+          : (willEvolve
+            ? `Ур. ${curStack} → ${curStack + 1} / ${upg.maxStacks} • ПРОБУДИТ ЭВОЛЮЦИЮ`
+            : `Улучшение: ${curStack} → ${curStack + 1} / ${upg.maxStacks}`);
         btn.innerHTML = `
           <div class="upg-top">
             <span class="upg-tag">${willEvolve ? `ЭВОЛЮЦИЯ -> ${upg.evolution.title}` : upg.tag}</span>
@@ -1975,71 +2482,148 @@ window.SG = window.SG || {};
           <h3 class="upg-title">${upg.title}</h3>
           <p class="upg-desc">${upg.desc}</p>
           ${evoHtml}
-          <div class="upg-stacks">${willEvolve ? `ЭВОЛЮЦИЯ: ${curStack + 1} / ${upg.maxStacks} [MAX]` : `Уровень: ${curStack + 1} / ${upg.maxStacks}`}</div>
+          <div class="upg-stacks">${levelText}</div>
         `;
-        btn.addEventListener('click', () => this.selectUpgrade(upg));
+        btn.addEventListener('click', () => {
+          if (this._upgradeSelecting || performance.now() < this._upgradeGuardUntil) return;
+          this.selectUpgrade(upg);
+        });
         container.appendChild(btn);
       });
 
       const rerollBtn = document.getElementById('btn-upgrade-reroll');
       if (rerollBtn) {
+        const eligibleCount = SG.countEligibleUpgrades(this.upgradeStacks, this.evolvedUpgrades);
         rerollBtn.textContent = `Перебросить (${this.rerolls}) [R]`;
-        rerollBtn.disabled = this.rerolls <= 0;
+        rerollBtn.disabled = this.rerolls <= 0 || eligibleCount <= this.currentChoices.length;
       }
     }
 
     rerollUpgrades() {
-      if (this.state !== 'upgrade' || this.rerolls <= 0) return;
+      if (this.state !== 'upgrade' || this._upgradeSelecting || this.rerolls <= 0) return;
+      if (SG.countEligibleUpgrades(this.upgradeStacks, this.evolvedUpgrades) <= this.currentChoices.length) return;
       this.rerolls--;
       const prevIds = new Set(this.currentChoices.map(u => u.id));
-      let next = SG.rollUpgradeChoices(this.upgradeStacks, 4);
+      let next = SG.rollUpgradeChoices(this.upgradeStacks, 4, this.evolvedUpgrades);
       // Avoid identical set when other eligible upgrades exist
       if (next.length > 0 && next.every(u => prevIds.has(u.id))) {
-        const alt = SG.rollUpgradeChoices(this.upgradeStacks, 4);
+        const alt = SG.rollUpgradeChoices(this.upgradeStacks, 4, this.evolvedUpgrades);
         if (alt.length > 0) next = alt;
       }
-      this.currentChoices = next;
       this.audio.playDeflect();
-      this.renderUpgradeChoices();
+      if (this.shouldAnimateUpgradeUI()) {
+        this._upgradeSelecting = true;
+        const cards = document.querySelectorAll('#upgrade-cards .upgrade-card');
+        cards.forEach(c => {
+          c.disabled = true;
+          c.classList.remove('anim-enter');
+          c.classList.add('is-rerolling');
+        });
+        const rerollBtn = document.getElementById('btn-upgrade-reroll');
+        if (rerollBtn) rerollBtn.disabled = true;
+        clearTimeout(this._upgradeAnimTimer);
+        this._upgradeAnimTimer = setTimeout(() => {
+          this._upgradeAnimTimer = null;
+          this._upgradeSelecting = false;
+          if (this.state !== 'upgrade') return;
+          this.currentChoices = next;
+          this.renderUpgradeChoices();
+        }, 130);
+      } else {
+        this.currentChoices = next;
+        this.renderUpgradeChoices();
+      }
     }
 
     selectUpgrade(upg) {
-      if (this.state !== 'upgrade') return;
-      this.upgradeStacks[upg.id] = (this.upgradeStacks[upg.id] || 0) + 1;
-      upg.apply(this.player.mods, this.player, this);
+      if (this.state !== 'upgrade' || this._upgradeSelecting || !upg) return;
+      const chosenIdx = this.currentChoices.indexOf(upg);
+      if (chosenIdx === -1) return;
+      const prevStack = this.upgradeStacks[upg.id] || 0;
+      if (prevStack >= upg.maxStacks || this.evolvedUpgrades.has(upg.id)) return;
 
-      let evolvedNow = false;
-      if (this.upgradeStacks[upg.id] === upg.maxStacks && upg.evolution && !this.evolvedUpgrades.has(upg.id)) {
-        this.evolvedUpgrades.add(upg.id);
-        upg.evolution.apply(this.player.mods, this.player, this);
-        evolvedNow = true;
-      }
+      clearTimeout(this._aiUpgradeTimer);
+      this._aiUpgradeTimer = null;
+      this._upgradeSelecting = true;
 
-      const dlg = document.getElementById('upgrade-dialog');
-      if (dlg && dlg.open) dlg.close();
+      const cards = document.querySelectorAll('#upgrade-cards .upgrade-card');
+      cards.forEach(c => { c.disabled = true; });
+      const rerollBtn = document.getElementById('btn-upgrade-reroll');
+      if (rerollBtn) rerollBtn.disabled = true;
 
-      this._buildDirty = true;
-      this.state = 'playing';
-      if (evolvedNow) {
-        this.particles.addShockwave(this.player.x, this.player.y, 240, '#ffd166', 0.55, 3.8);
-        this.particles.addShockwave(this.player.x, this.player.y, 165, '#00f0ff', 0.45, 3.0);
-        this.particles.burst(this.player.x, this.player.y, 45, '#ffd166', 90, 340, 0.65, true);
-        this.particles.addText(this.player.x, this.player.y - 34, `ЭВОЛЮЦИЯ: ${upg.evolution.title.toUpperCase()}!`, '#ffd166', 1.32, 1.8);
-        this.addScreenShake(8);
-        this.addHitstop(0.045);
-        if (typeof this.audio.playEvolution === 'function') this.audio.playEvolution();
-        else this.audio.playLevelUp();
+      const willEvolve = !!(upg.evolution && (prevStack + 1) === upg.maxStacks);
+
+      const commitSelection = () => {
+        this._upgradeSelecting = false;
+        this._upgradeAnimTimer = null;
+        this._upgradeCloseTimer = null;
+        this.currentChoices = [];
+
+        this.upgradeStacks[upg.id] = Math.min(upg.maxStacks, prevStack + 1);
+        upg.apply(this.player.mods, this.player, this);
+
+        let evolvedNow = false;
+        if (this.upgradeStacks[upg.id] === upg.maxStacks && upg.evolution && !this.evolvedUpgrades.has(upg.id)) {
+          this.evolvedUpgrades.add(upg.id);
+          upg.evolution.apply(this.player.mods, this.player, this);
+          evolvedNow = true;
+        }
+
+        const dlg = document.getElementById('upgrade-dialog');
+        if (dlg) {
+          dlg.classList.remove('is-closing');
+          if (dlg.open) dlg.close();
+        }
+
+        this._buildDirty = true;
+        this.state = 'playing';
+
+        const rarityColor = (upg.rarity === 'legendary') ? '#ffb838' : (upg.rarity === 'epic' ? '#c06cff' : '#00f0ff');
+        if (evolvedNow) {
+          this.particles.addShockwave(this.player.x, this.player.y, 240, '#ffd166', 0.55, 3.8);
+          this.particles.addShockwave(this.player.x, this.player.y, 165, '#00f0ff', 0.45, 3.0);
+          this.particles.burst(this.player.x, this.player.y, 45, '#ffd166', 90, 340, 0.65, true);
+          this.particles.addText(this.player.x, this.player.y - 34, `ЭВОЛЮЦИЯ: ${upg.evolution.title.toUpperCase()}!`, '#ffd166', 1.32, 1.8);
+          this.addScreenShake(8);
+          this.addHitstop(0.045);
+          if (typeof this.audio.playEvolution === 'function') this.audio.playEvolution();
+          else this.audio.playLevelUp();
+        } else {
+          this.particles.addShockwave(this.player.x, this.player.y, 175, rarityColor, 0.45, 3.0);
+          this.particles.burst(this.player.x, this.player.y, 18, rarityColor, 70, 220, 0.45, true);
+          this.particles.addText(this.player.x, this.player.y - 28, `${upg.title.toUpperCase()}`, rarityColor === '#00f0ff' ? '#7df9ff' : rarityColor, 1.18);
+        }
+        this.updateHUD();
+        this.checkLevelUp();
+      };
+
+      if (this.shouldAnimateUpgradeUI() && cards.length > 0 && cards[chosenIdx]) {
+        cards.forEach((c, idx) => {
+          c.classList.remove('anim-enter');
+          if (idx === chosenIdx) {
+            c.classList.add('is-chosen');
+            if (willEvolve) c.classList.add('is-chosen-evo');
+          } else {
+            c.classList.add('is-dismissed');
+          }
+        });
+        this.audio.playDeflect();
+        const animMs = willEvolve ? 430 : 320;
+        const dlg = document.getElementById('upgrade-dialog');
+        this._upgradeCloseTimer = setTimeout(() => {
+          this._upgradeCloseTimer = null;
+          if (dlg && dlg.open) dlg.classList.add('is-closing');
+        }, Math.max(0, animMs - 140));
+        this._upgradeAnimTimer = setTimeout(commitSelection, animMs);
       } else {
-        this.particles.addShockwave(this.player.x, this.player.y, 165, '#00f0ff', 0.45, 3);
-        this.particles.addText(this.player.x, this.player.y - 28, `${upg.title.toUpperCase()}`, '#7df9ff', 1.18);
+        commitSelection();
       }
-      this.updateHUD();
-      this.checkLevelUp();
     }
 
     triggerGameOver() {
+      this.clearInputs();
       this.state = 'gameover';
-      this.mouse.leftDown = false;
+      this.updateHUD();
 
       const isNewRecord = this.score > this.bestScore && this.score > 0;
       if (this.score > this.bestScore) {
@@ -2142,22 +2726,37 @@ window.SG = window.SG || {};
           this.detonateAllWells();
         }
       } else {
+        if (this.touchInput.bulletTime && this.player.chrono <= 1) {
+          this.touchInput.bulletTime = false;
+        }
         const kbMoveX = (this.keys['KeyD'] || this.keys['ArrowRight'] ? 1 : 0) - (this.keys['KeyA'] || this.keys['ArrowLeft'] ? 1 : 0);
         const kbMoveY = (this.keys['KeyS'] || this.keys['ArrowDown'] ? 1 : 0) - (this.keys['KeyW'] || this.keys['ArrowUp'] ? 1 : 0);
         const moveX = Math.abs(this.touchInput.moveX) > 0.05 ? this.touchInput.moveX : kbMoveX;
         const moveY = Math.abs(this.touchInput.moveY) > 0.05 ? this.touchInput.moveY : kbMoveY;
         let aimX = this.mouse.x;
         let aimY = this.mouse.y;
-        if (this.isTouchDevice && Math.hypot(moveX, moveY) > 0.05 && aimX === 0 && aimY === 0) {
-          aimX = this.player.x + moveX * 220;
-          aimY = this.player.y + moveY * 220;
+        let firing = this.mouse.leftDown || this.keys['KeyF'] || this.touchInput.firing;
+        if (this.isTouchDevice) {
+          let ang = this.player.aimAngle;
+          if (this.touchInput.aimHasDir) {
+            ang = Math.atan2(this.touchInput.aimDirY, this.touchInput.aimDirX);
+          } else if (Math.hypot(moveX, moveY) > 0.08) {
+            ang = Math.atan2(moveY, moveX);
+          }
+          aimX = this.player.x + Math.cos(ang) * 235;
+          aimY = this.player.y + Math.sin(ang) * 235;
+          this.mouse.x = aimX;
+          this.mouse.y = aimY;
+          if (this.settings.touchAutofire && this.enemies.length > 0) {
+            firing = true;
+          }
         }
         input = {
           moveX,
           moveY,
           aimX,
           aimY,
-          firing: this.mouse.leftDown || this.keys['KeyF'] || this.touchInput.firing,
+          firing,
           bulletTime: !!this.keys['Space'] || this.touchInput.bulletTime
         };
       }
@@ -2363,9 +2962,13 @@ window.SG = window.SG || {};
       if (this.waveBannerTimer > 0) this.waveBannerTimer -= dt;
       if (this.waveQueue.length > 0) {
         this.waveSpawnTimer -= worldDt;
-        if (this.waveSpawnTimer <= 0) {
-          this.spawnFromWaveQueue();
-          this.waveSpawnTimer = Math.max(0.22, 0.68 - this.wave * 0.025);
+        const maxActive = Math.min(48, 18 + this.wave * 2);
+        if (this.waveSpawnTimer <= 0 && this.enemies.length < maxActive) {
+          const batch = this.wave >= 16 ? 3 : (this.wave >= 8 ? 2 : 1);
+          for (let bi = 0; bi < batch && this.waveQueue.length > 0 && this.enemies.length < maxActive; bi++) {
+            this.spawnFromWaveQueue();
+          }
+          this.waveSpawnTimer = Math.max(0.24, 0.68 - this.wave * 0.022);
         }
       } else if (this.enemies.length === 0) {
         this.startWave(this.wave + 1);
@@ -2410,8 +3013,7 @@ window.SG = window.SG || {};
           }
         }
         if (hitPlayer) {
-          const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
-          const baseContact = Math.round(18 * (diffCfg.dmgScale || 1.0));
+          const baseContact = Math.round(18 * this.getEnemyDamageScale() * (e1.isBoss ? 1.45 : (e1.isElite ? 1.35 : 1.0)));
           const ramLvl = this.player.mods.ramLevel;
           if (ramLvl > 0) {
             const contactRed = Math.min(0.65, 0.3 + ramLvl * 0.15);
@@ -2691,9 +3293,9 @@ window.SG = window.SG || {};
             const rdx = b.x - this.player.x;
             const rdy = b.y - this.player.y;
             const rd = Math.hypot(rdx, rdy) || 1;
-            const rMult = this.player.mods.auraRadiusMult || 1.0;
+            const rMult = SG.getEffectiveAuraMult(this.player.mods.auraRadiusMult);
 
-            if (this.player.mods.antimatterLevel > 0 && this.player.antimatterTimer <= 0 && b.damage <= 20 && rd < this.player.mods.antimatterRadius * rMult) {
+            if (this.player.mods.antimatterLevel > 0 && this.player.antimatterTimer <= 0 && !b.isLance && b.damage <= Math.round(22 * this.getEnemyDamageScale()) && rd < this.player.mods.antimatterRadius * rMult) {
               this.player.antimatterTimer = 1.2 / this.player.mods.antimatterLevel;
               this.particles.burst(b.x, b.y, 8, '#f472b6', 50, 150, 0.28);
               this.bullets.splice(i, 1);
@@ -3102,9 +3704,11 @@ window.SG = window.SG || {};
     updatePlayerAuras(dt, worldDt) {
       const p = this.player;
       const m = p.mods;
-      const rMult = m.auraRadiusMult || 1.0;
+      const rMult = SG.getEffectiveAuraMult(m.auraRadiusMult);
       const fortressBoost = (m.fortressLevel > 0 && p.hp / p.maxHp >= 0.7) ? (1 + 0.45 * m.fortressLevel) : 1.0;
-      const auraPower = (m.auraDpsMult || 1.0) * fortressBoost;
+      const rawAuraPower = (m.auraDpsMult || 1.0) * fortressBoost;
+      const auraPower = SG.getEffectiveAuraPower(rawAuraPower);
+      const auraMultFor = (e) => Math.max(0.25, 1 - (e.auraResist || 0));
 
       const cryoR = m.cryoRadius * rMult;
       const coronaR = m.coronaRadius * rMult;
@@ -3157,13 +3761,13 @@ window.SG = window.SG || {};
             const re = this.enemies[ri];
             if (!re.dead && Math.hypot(re.x - e.x, re.y - e.y) <= 150 + re.radius) {
               re.radStacks = Math.min(25, (re.radStacks || 0) + 4);
-              this.damageEnemy(re, meltDmg, '#a3e635', 'РАСПАД!');
+              this.damageEnemy(re, Math.round(meltDmg * auraMultFor(re)), '#a3e635', 'РАСПАД!');
             }
           }
           if (e.dead) continue;
         }
         if (e.radStacks > 0) {
-          e.hp -= e.radStacks * 14 * auraPower * worldDt;
+          e.hp -= e.radStacks * 14 * auraPower * auraMultFor(e) * worldDt;
           if (e.hp <= 0) {
             this.killEnemy(e);
             continue;
@@ -3172,7 +3776,7 @@ window.SG = window.SG || {};
 
         if (m.coronaRadius > 0 && d <= coronaR + e.radius) {
           const thermalMult = (e.cryoTimer > 0 && m.thermalShock > 0) ? (1 + 1.2 * m.thermalShock) : 1.0;
-          const burnDmg = m.coronaDps * auraPower * thermalMult * worldDt;
+          const burnDmg = m.coronaDps * auraPower * thermalMult * auraMultFor(e) * worldDt;
           e.hp -= burnDmg;
           if (Math.random() < 0.25) {
             this.particles.spawn(e.x, e.y, (Math.random() - 0.5) * 60, -40 - Math.random() * 50, {
@@ -3187,7 +3791,7 @@ window.SG = window.SG || {};
 
         if (m.entropyRadius > 0 && d <= entropyR + e.radius) {
           const entMult = m.evoEntropyTether > 0 ? 2.0 : 1.0;
-          const drain = m.entropyDps * auraPower * worldDt;
+          const drain = m.entropyDps * auraPower * auraMultFor(e) * worldDt;
           e.hp -= drain;
           p.shield = Math.min(p.maxShield, p.shield + drain * 0.18 * entMult);
           const gained = Math.min(p.maxHp - p.hp, drain * 0.06 * entMult);
@@ -3209,14 +3813,15 @@ window.SG = window.SG || {};
       if (m.evoCoronaSupernova > 0 && m.coronaRadius > 0 && p.coronaNovaTimer <= 0 && this.enemies.length > 0) {
         p.coronaNovaTimer = 3.0;
         const cNovaR = coronaR * 1.3;
-        const cNovaDmg = Math.round(60 * auraPower);
+        const cNovaDmg = 60 * auraPower;
         this.particles.addShockwave(p.x, p.y, cNovaR, '#ff8538', 0.42, 3.0);
         for (let i = this.enemies.length - 1; i >= 0; i--) {
           const e = this.enemies[i];
           if (!e.dead && Math.hypot(e.x - p.x, e.y - p.y) <= cNovaR + e.radius) {
+            const eResist = auraMultFor(e);
             e.burnTimer = Math.max(e.burnTimer || 0, 3.5);
-            e.burnDps = Math.max(e.burnDps || 0, Math.round(24 * auraPower));
-            this.damageEnemy(e, cNovaDmg, '#ff8538');
+            e.burnDps = Math.max(e.burnDps || 0, Math.round(24 * auraPower * eResist));
+            this.damageEnemy(e, Math.round(cNovaDmg * eResist), '#ff8538');
           }
         }
       }
@@ -3227,11 +3832,11 @@ window.SG = window.SG || {};
       p.beamTargets = beamCandidates.slice(0, beamLimit).map(c => c.enemy);
       p.beamTarget = p.beamTargets[0] || null;
       if (m.beamLevel > 0 && p.beamTargets.length > 0) {
-        const beamDmg = 48 * m.beamLevel * m.damageMult * auraPower * worldDt;
+        const beamBase = 48 * m.beamLevel * Math.sqrt(Math.max(1, m.damageMult)) * auraPower * worldDt;
         for (let bi = 0; bi < p.beamTargets.length; bi++) {
           const bt = p.beamTargets[bi];
           if (!bt || bt.dead) continue;
-          bt.hp -= beamDmg;
+          bt.hp -= beamBase * auraMultFor(bt);
           bt.cryoTimer = Math.max(bt.cryoTimer || 0, 0.14);
           bt.cryoSlow = Math.max(bt.cryoSlow || 0, 0.25);
           if (Math.random() < 0.35) {
@@ -3257,15 +3862,16 @@ window.SG = window.SG || {};
         if (inRange.length > 0) {
           p.stormTimer = Math.max(0.38, 0.9 - m.stormLevel * 0.12);
           const maxHits = Math.min(inRange.length, 1 + m.stormLevel);
-          const zapDmg = Math.round(32 * m.stormLevel * m.damageMult * auraPower);
+          const zapBase = 32 * m.stormLevel * Math.sqrt(Math.max(1, m.damageMult)) * auraPower;
           for (let k = 0; k < maxHits; k++) {
             const target = inRange[k];
+            const zapDmg = Math.round(zapBase * auraMultFor(target));
             const echoMult = (m.resonanceEcho > 0 && Math.random() < 0.4) ? (1 + m.resonanceEcho) : 1;
             this.particles.addLightning(p.x, p.y, target.x, target.y, '#7df9ff', 0.22);
             if (m.evoStormChain > 0 && !target.dead) {
               target.stunTimer = Math.max(target.stunTimer, 0.4);
             }
-            this.damageEnemy(target, zapDmg * echoMult, '#7df9ff');
+            this.damageEnemy(target, Math.round(zapDmg * echoMult), '#7df9ff');
             if (m.evoStormChain > 0) {
               const prevChains = m.chainTargets;
               m.chainTargets = Math.max(prevChains, 3);
@@ -3288,10 +3894,10 @@ window.SG = window.SG || {};
           const d = Math.hypot(dx, dy) || 1;
           if (d <= repulseR + e.radius) {
             hitAny = true;
-            const push = (e.isBoss ? 140 : 420) + m.repulseAura * 95;
+            const push = (e.isBoss ? 140 : (e.isElite ? 260 : 420)) + m.repulseAura * 95;
             e.vx += (dx / d) * push;
             e.vy += (dy / d) * push;
-            this.damageEnemy(e, Math.round(14 * m.repulseAura * auraPower), '#d98aff');
+            this.damageEnemy(e, Math.round(14 * m.repulseAura * auraPower * auraMultFor(e)), '#d98aff');
           }
         }
         if (m.evoRepulseReflect > 0) {
@@ -3319,7 +3925,7 @@ window.SG = window.SG || {};
         p.novaTimer = Math.max(1.4, 3.2 - m.novaLevel * 0.45);
         this.particles.addShockwave(p.x, p.y, novaR, '#ff9e2c', 0.44, 3.2);
         this.grid.applyRadialForce(p.x, p.y, 1100, novaR * 1.15, 34);
-        const novaDmg = Math.round(52 * m.novaLevel * auraPower);
+        const novaBase = 52 * m.novaLevel * auraPower;
         for (let i = 0; i < this.enemies.length; i++) {
           const e = this.enemies[i];
           if (e.dead) continue;
@@ -3327,9 +3933,10 @@ window.SG = window.SG || {};
           const dy = e.y - p.y;
           const d = Math.hypot(dx, dy) || 1;
           if (d <= novaR + e.radius) {
-            e.vx += (dx / d) * 340;
-            e.vy += (dy / d) * 340;
-            this.damageEnemy(e, novaDmg, '#ff9e2c');
+            const push = e.isBoss ? 120 : (e.isElite ? 220 : 340);
+            e.vx += (dx / d) * push;
+            e.vy += (dy / d) * push;
+            this.damageEnemy(e, Math.round(novaBase * auraMultFor(e)), '#ff9e2c');
           }
         }
       }
@@ -3357,13 +3964,14 @@ window.SG = window.SG || {};
         p.flareTimer = Math.max(2.8, 4.5 - (m.solarFlareLevel - 1) * 0.5);
         const flareR = 220 * rMult;
         this.particles.addShockwave(p.x, p.y, flareR, '#ff6b35', 0.45, 3.0);
-        const fDmg = Math.round(38 * m.solarFlareLevel * auraPower);
+        const fBase = 38 * m.solarFlareLevel * auraPower;
         for (let i = 0; i < this.enemies.length; i++) {
           const e = this.enemies[i];
           if (!e.dead && Math.hypot(e.x - p.x, e.y - p.y) <= flareR + e.radius) {
+            const eResist = auraMultFor(e);
             e.burnTimer = Math.max(e.burnTimer || 0, 3.0);
-            e.burnDps = Math.max(e.burnDps || 0, Math.round(18 * m.solarFlareLevel * auraPower));
-            this.damageEnemy(e, fDmg, '#ff8538');
+            e.burnDps = Math.max(e.burnDps || 0, Math.round(18 * m.solarFlareLevel * auraPower * eResist));
+            this.damageEnemy(e, Math.round(fBase * eResist), '#ff8538');
           }
         }
       }
@@ -3372,12 +3980,12 @@ window.SG = window.SG || {};
       if (m.leechNova > 0 && p.healBuffer >= 30) {
         while (p.healBuffer >= 30) {
           p.healBuffer -= 30;
-          const leechDmg = Math.round(55 * m.leechNova * m.damageMult);
+          const leechBase = 55 * m.leechNova * Math.sqrt(Math.max(1, m.damageMult)) * auraPower;
           this.particles.addShockwave(p.x, p.y, 180, '#ff3b6b', 0.36, 2.8);
           for (let i = this.enemies.length - 1; i >= 0; i--) {
             const e = this.enemies[i];
             if (!e.dead && Math.hypot(e.x - p.x, e.y - p.y) <= 180 + e.radius) {
-              this.damageEnemy(e, leechDmg, '#ff3b6b');
+              this.damageEnemy(e, Math.round(leechBase * auraMultFor(e)), '#ff3b6b');
             }
           }
         }
@@ -3434,7 +4042,8 @@ window.SG = window.SG || {};
       const els = this.hudEls;
       if (els.hud) els.hud.hidden = (this.state === 'title');
       if (els.fpsBadge) els.fpsBadge.hidden = !this.settings.showFps || this.state === 'title';
-      const touchEl = document.getElementById('touch-controls');
+      if (els.versionBadge) els.versionBadge.classList.toggle('in-game', this.state === 'playing');
+      const touchEl = (this.touchEls && this.touchEls.root) || document.getElementById('touch-controls');
       if (touchEl) touchEl.hidden = !(this.isTouchDevice && this.state === 'playing');
       const pillsEl = document.querySelector('.ability-pills');
       if (pillsEl) pillsEl.hidden = this.isTouchDevice;
@@ -3514,13 +4123,33 @@ window.SG = window.SG || {};
         }
       }
 
+      if (els.menuBtn) {
+        els.menuBtn.innerHTML = this.isTouchDevice ? 'Пауза' : 'Меню <span class="key-hint">[Esc]</span>';
+      }
+
       if (els.aiBtn) {
         els.aiBtn.classList.toggle('active', this.autopilot.enabled);
-        els.aiBtn.textContent = this.autopilot.enabled ? 'ИИ: ВКЛ [P]' : 'ИИ-Пилот [P]';
+        if (this.isTouchDevice) {
+          els.aiBtn.textContent = this.autopilot.enabled ? 'ИИ: ВКЛ' : 'ИИ';
+        } else {
+          els.aiBtn.innerHTML = this.autopilot.enabled
+            ? 'ИИ: ВКЛ <span class="key-hint">[P]</span>'
+            : 'ИИ-Пилот <span class="key-hint">[P]</span>';
+        }
+      }
+
+      if (els.muteBtn) {
+        if (this.isTouchDevice) {
+          els.muteBtn.textContent = this.audio.muted ? '🔇' : '🔊';
+        } else {
+          els.muteBtn.textContent = this.audio.muted ? 'Звук: ВЫКЛ' : 'Звук: ВКЛ';
+        }
       }
 
       if (els.polBtn) {
-        els.polBtn.textContent = this.repulsorMode ? 'Белая дыра [R]' : 'Черная дыра [R]';
+        els.polBtn.innerHTML = this.repulsorMode
+          ? 'Белая дыра <span class="key-hint">[R]</span>'
+          : 'Черная дыра <span class="key-hint">[R]</span>';
         els.polBtn.classList.toggle('repulsor', this.repulsorMode);
       }
 
@@ -3528,6 +4157,48 @@ window.SG = window.SG || {};
         els.aiBanner.hidden = !this.autopilot.enabled;
         if (this.autopilot.enabled) {
           els.aiBanner.textContent = `ИИ-ТЕЛЕМЕТРИЯ: ${this.autopilot.decisionLabel}`;
+        }
+      }
+
+      // Live touch button cooldowns, timers, polarity & chrono state
+      const te = this.touchEls;
+      if (this.isTouchDevice && te) {
+        const updateCdBtn = (ref, cd, maxCd) => {
+          if (!ref || !ref.el) return;
+          const onCd = cd > 0.05;
+          ref.el.classList.toggle('on-cd', onCd);
+          const pct = onCd ? Math.max(0, Math.min(1, cd / Math.max(0.1, maxCd))) : 0;
+          if (ref.cd) ref.cd.style.setProperty('--cd-pct', pct.toFixed(2));
+          if (ref.timer) ref.timer.textContent = onCd ? `${cd.toFixed(1)}` : '';
+        };
+
+        const dashMax = 2.8 / Math.max(0.7, p.mods.moveSpeedMult);
+        const wellMax = 1.6 * p.mods.wellCdMult;
+        const detMax = 5.5 * p.mods.detonateCdMult;
+        const rewMax = 9.0 * p.mods.rewindCdMult;
+
+        updateCdBtn(te.dash, p.dashCooldown, dashMax);
+        updateCdBtn(te.well, p.wellCooldown, wellMax);
+        updateCdBtn(te.detonate, p.detonateCooldown, detMax);
+        updateCdBtn(te.rewind, p.rewindCooldown, rewMax);
+
+        if (te.well && te.well.el) {
+          te.well.el.classList.toggle('repulsor', this.repulsorMode);
+          if (te.well.label) te.well.label.textContent = this.repulsorMode ? 'БЕЛ.Д' : 'ДЫРА';
+        }
+        if (te.polarity && te.polarity.el) {
+          te.polarity.el.classList.toggle('repulsor', this.repulsorMode);
+          if (te.polarity.label) te.polarity.label.textContent = this.repulsorMode ? 'БЕЛ' : 'ЧЁРН';
+        }
+        if (te.detonate && te.detonate.el) {
+          const hasWells = this.wells.length > 0;
+          te.detonate.el.classList.toggle('ready-glow', hasWells && p.detonateCooldown <= 0.05);
+          te.detonate.el.classList.toggle('disabled-dim', !hasWells);
+        }
+        if (te.bt && te.bt.el) {
+          te.bt.el.classList.toggle('active-toggle', !!p.bulletTimeActive);
+          const depleted = Math.max(0, Math.min(1, 1 - p.chrono / Math.max(1, p.maxChrono)));
+          if (te.bt.cd) te.bt.cd.style.setProperty('--cd-pct', depleted.toFixed(2));
         }
       }
     }
@@ -3567,7 +4238,8 @@ window.SG = window.SG || {};
           autopilot: this.autopilot,
           state: this.state,
           quality: this.settings.quality,
-          preset
+          preset,
+          isTouchDevice: this.isTouchDevice
         });
       }
 
@@ -3818,12 +4490,12 @@ window.SG = window.SG || {};
         }
       }
 
-      // Boss Health Bar at bottom-center (bar drawn by GPU when useGpu, label drawn here)
+      // Boss Health Bar (top-center on touch so thumbs don't cover it; bottom-center on desktop)
       const boss = this.enemies.find(e => e.isBoss && !e.dead);
       if (boss) {
-        const bw = Math.min(480, w * 0.62);
+        const bw = Math.min(480, w * (this.isTouchDevice ? 0.56 : 0.62));
         const bx = (w - bw) * 0.5;
-        const by = h - 42;
+        const by = this.isTouchDevice ? 78 : h - 42;
         if (!useGpu) {
           ctx.fillStyle = 'rgba(6, 10, 24, 0.82)';
           ctx.strokeStyle = 'rgba(255, 59, 107, 0.6)';
@@ -3838,6 +4510,49 @@ window.SG = window.SG || {};
         ctx.font = '700 12px "JetBrains Mono", system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(`БОСС: ${boss.name} [ФАЗА ${boss.bossPhase || 1}/3] — ${Math.ceil(boss.hp)} / ${boss.maxHp}`, w * 0.5, by - 7);
+      }
+
+      // Gravity Well Skillshot Preview (Touch Drag)
+      if (this.state === 'playing' && this.touchInput && this.touchInput.wellPreviewActive && this.player) {
+        const wx = this.touchInput.wellPreviewX;
+        const wy = this.touchInput.wellPreviewY;
+        const rMult = (this.player.mods && this.player.mods.wellRadiusMult) || 1.0;
+        const col = this.touchInput.wellCancel ? '#ff3b6b' : (this.repulsorMode ? '#ffb838' : '#c06cff');
+        ctx.save();
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([5, 6]);
+        ctx.beginPath();
+        ctx.moveTo(this.player.x, this.player.y);
+        ctx.lineTo(wx, wy);
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.22;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 265 * rMult, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.72;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 74 * rMult, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.95;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 18 * rMult, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (this.touchInput.wellCancel) {
+          ctx.fillStyle = '#ff6b8b';
+          ctx.font = '800 11px "JetBrains Mono", system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('ОТМЕНА', wx, wy - 28 * rMult);
+        }
+        ctx.restore();
       }
 
       // Screen-Space Vignettes & Cinematic Wave Banner (unshaken HUD space)
