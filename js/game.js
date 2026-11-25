@@ -4,7 +4,7 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v2.5.1';
+  SG.VERSION = 'v2.5.2';
 
   const WORLD_SIZE = 24000;
   const DUNGEON_SIZE = 2200;
@@ -92,6 +92,21 @@ window.SG = window.SG || {};
       desc: 'Увеличивает весь получаемый опыт (+12%/ур.) и ускоряет появление новых разломов.',
       enDesc: 'Increases all XP gained (+12%/lv) and speeds up rift respawns.',
       rateLabel: (lvl) => `+${[12, 24, 36][lvl - 1] || 12}% XP`
+    },
+    {
+      id: 'laser_turret',
+      name: 'Плазменная Турель',
+      enName: 'Plasma Turret',
+      shortName: 'ТУРЕЛЬ',
+      enShortName: 'TURRET',
+      color: '#ff6b4a',
+      maxCount: 4,
+      maxLevel: 3,
+      costs: [35, 65, 110],
+      rates: [120, 175, 240],
+      desc: 'Автоматически атакует патрули и рейдеров вокруг базы плазменными залпами.',
+      enDesc: 'Automatically engages patrols and raiders around the Base with plasma bolts.',
+      rateLabel: (lvl) => `${[120, 175, 240][lvl - 1] || 120} DPS`
     }
   ];
 
@@ -198,6 +213,11 @@ window.SG = window.SG || {};
       this._basePulseTimer = 0;
       this._baseHpBonus = 0;
       this._baseShieldBonus = 0;
+      this._owPatrolTimer = 2.0;
+      this._raidTimer = 48;
+      this._raidActive = false;
+      this._raidRewardPending = null;
+      this._coreTurretCd = 0;
       this._autoSaveTimer = 0;
       this._lastSavedAt = 0;
 
@@ -911,6 +931,11 @@ window.SG = window.SG || {};
       this._basePulseTimer = 0;
       this._baseHpBonus = 0;
       this._baseShieldBonus = 0;
+      this._owPatrolTimer = 2.0;
+      this._raidTimer = 48;
+      this._raidActive = false;
+      this._raidRewardPending = null;
+      this._coreTurretCd = 0;
       this._autoSaveTimer = 0;
       if (isEndless) {
         this.anomalies = [];
@@ -979,6 +1004,218 @@ window.SG = window.SG || {};
         }
       }
       this.updateHUD();
+    }
+
+    updateOverworldCombat(dt) {
+      if (!this.player || !this.base || this.gameMode !== 'openworld') return;
+
+      // 1. Roaming Overworld Patrols (keeps sector alive while flying between rifts)
+      const maxPatrols = Math.min(10, 4 + Math.floor(this.level / 3));
+      const activePatrols = this.enemies.filter(e => !e.dead && !e.isRaider).length;
+      this._owPatrolTimer = (this._owPatrolTimer || 0) - dt;
+      if (this._owPatrolTimer <= 0 && activePatrols < maxPatrols && this.enemies.length < 28) {
+        this._owPatrolTimer = 2.8 + Math.random() * 2.2;
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 920 + Math.random() * 520;
+        const sx = Math.max(180, Math.min(WORLD_SIZE - 180, this.player.x + Math.cos(ang) * dist));
+        const sy = Math.max(180, Math.min(WORLD_SIZE - 180, this.player.y + Math.sin(ang) * dist));
+        if (Math.hypot(sx - this.base.x, sy - this.base.y) > this.base.repairRadius + 320) {
+          const pool = this.level >= 6 ? ['swarmer', 'shooter', 'pulsar', 'splitter'] : ['swarmer', 'shooter', 'shield'];
+          const kind = pool[Math.floor(Math.random() * pool.length)];
+          const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
+          const scale = (0.78 + this.level * 0.08) * diffCfg.enemyScale;
+          const enemy = SG.createEnemy(kind, sx, sy, scale, {
+            waveNum: Math.max(1, this.level),
+            isElite: this.level >= 5 && Math.random() < 0.16
+          });
+          this.enemies.push(enemy);
+        }
+      }
+
+      // 2. Periodic Base Raids
+      const bCount = this.buildings ? this.buildings.length : 0;
+      if (!this._raidActive) {
+        this._raidTimer = (this._raidTimer || 48) - dt * (1 + bCount * 0.05);
+        if (this._raidTimer <= 0) {
+          const squadSize = Math.min(12, 4 + Math.floor(bCount * 0.8) + Math.floor(this.level * 0.35));
+          const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
+          const scale = (0.88 + this.level * 0.09) * diffCfg.enemyScale;
+          const baseAng = Math.random() * Math.PI * 2;
+          const pool = this.level >= 5 ? ['swarmer', 'shooter', 'shield', 'pulsar'] : ['swarmer', 'shooter', 'shield'];
+
+          for (let i = 0; i < squadSize; i++) {
+            const ang = baseAng + (Math.random() - 0.5) * 0.85;
+            const r = 1480 + Math.random() * 280;
+            const sx = Math.max(180, Math.min(WORLD_SIZE - 180, this.base.x + Math.cos(ang) * r));
+            const sy = Math.max(180, Math.min(WORLD_SIZE - 180, this.base.y + Math.sin(ang) * r));
+            const kind = pool[i % pool.length];
+            const raider = SG.createEnemy(kind, sx, sy, scale, {
+              waveNum: Math.max(1, this.level),
+              isElite: i === 0 && (this.level >= 3 || bCount >= 2)
+            });
+            raider.isRaider = true;
+            raider.raidTarget = this.base;
+            this.enemies.push(raider);
+          }
+
+          this._raidActive = true;
+          this._raidRewardPending = {
+            matter: 22 + squadSize * 3,
+            xp: 120 + squadSize * 22
+          };
+          this._raidTimer = 58 + Math.random() * 22;
+          this.waveBannerTitle = this.t('game.raidIncoming');
+          this.waveSubtitle = this.t('game.raidIncomingSub', { n: squadSize });
+          this.waveBannerColor = '#ff3b6b';
+          this.waveBannerTimer = 3.4;
+          this.audio.playBossAlarm();
+        }
+      } else {
+        const raiders = this.enemies.filter(e => !e.dead && e.isRaider);
+        if (raiders.length === 0) {
+          this._raidActive = false;
+          const rew = this._raidRewardPending || { matter: 25, xp: 140 };
+          this._raidRewardPending = null;
+          if (!this.resources) this.resources = { matter: 0 };
+          this.resources.matter = (this.resources.matter || 0) + rew.matter;
+          this.waveBannerTitle = this.t('game.raidCleared');
+          this.waveSubtitle = this.t('game.raidClearedSub', { matter: rew.matter, xp: rew.xp });
+          this.waveBannerColor = '#22ffa6';
+          this.waveBannerTimer = 3.0;
+          this.audio.playLevelUp();
+          this.gainXP(rew.xp);
+          this.updateHUD();
+        } else {
+          // Keep raiders targeting nearest active building or Base Core
+          for (let i = 0; i < raiders.length; i++) {
+            const r = raiders[i];
+            let target = this.base;
+            let bestD = Math.hypot(this.base.x - r.x, this.base.y - r.y);
+            if (this.buildings) {
+              for (let j = 0; j < this.buildings.length; j++) {
+                const b = this.buildings[j];
+                if (b.disabled) continue;
+                const d = Math.hypot(b.x - r.x, b.y - r.y);
+                if (d < bestD) {
+                  bestD = d;
+                  target = b;
+                }
+              }
+            }
+            r.raidTarget = target;
+          }
+        }
+      }
+
+      // 3. Base Building HP, Raider Attacks, Auto-Repair & Plasma Turrets
+      if (this.buildings && this.buildings.length > 0) {
+        for (let i = 0; i < this.buildings.length; i++) {
+          const b = this.buildings[i];
+          const lvl = Math.max(1, Math.min(3, b.level || 1));
+          if (!b.maxHp) b.maxHp = 260 + (lvl - 1) * 140;
+          if (typeof b.hp !== 'number') b.hp = b.maxHp;
+
+          let underAttack = false;
+          for (let j = 0; j < this.enemies.length; j++) {
+            const e = this.enemies[j];
+            if (e.dead || !e.isRaider) continue;
+            const d = Math.hypot(e.x - b.x, e.y - b.y);
+            if (d <= e.radius + 40) {
+              underAttack = true;
+              if (!b.disabled) {
+                b.hp = Math.max(0, b.hp - 28 * dt);
+                if (b.hp <= 0) {
+                  b.disabled = true;
+                  this.particles.addShockwave(b.x, b.y, 110, '#ff4d6d', 0.4, 2.6);
+                  this.particles.burst(b.x, b.y, 18, '#ff4d6d', 50, 180, 0.45, true);
+                  this.syncBaseBonuses();
+                }
+              }
+            }
+          }
+
+          if (!underAttack && b.hp < b.maxHp) {
+            const playerNear = Math.hypot(this.player.x - b.x, this.player.y - b.y) < 240;
+            b.hp = Math.min(b.maxHp, b.hp + (playerNear ? 52 : 16) * dt);
+            if (b.disabled && b.hp >= b.maxHp) {
+              b.disabled = false;
+              this.particles.addShockwave(b.x, b.y, 95, '#22ffa6', 0.35, 2.2);
+              this.syncBaseBonuses();
+            }
+          }
+
+          // Plasma Turret targeting & firing
+          if (b.type === 'laser_turret' && !b.disabled) {
+            const range = 760 + (lvl - 1) * 95;
+            let nearest = null;
+            let bestD = range;
+            for (let j = 0; j < this.enemies.length; j++) {
+              const e = this.enemies[j];
+              if (e.dead) continue;
+              const d = Math.hypot(e.x - b.x, e.y - b.y);
+              if (d < bestD) {
+                bestD = d;
+                nearest = e;
+              }
+            }
+            if (nearest) {
+              const targetAng = Math.atan2(nearest.y - b.y, nearest.x - b.x);
+              b.angle = targetAng;
+              b.fireCd = (b.fireCd || 0) - dt;
+              if (b.fireCd <= 0) {
+                b.fireCd = 0.44 - lvl * 0.08;
+                const spd = 880;
+                const dmg = 26 + lvl * 18;
+                this.spawnBullet({
+                  x: b.x + Math.cos(targetAng) * 32,
+                  y: b.y + Math.sin(targetAng) * 32,
+                  vx: Math.cos(targetAng) * spd,
+                  vy: Math.sin(targetAng) * spd,
+                  damage: dmg,
+                  radius: 4.2,
+                  color: '#ff6b4a',
+                  fromPlayer: true,
+                  pierce: lvl >= 3 ? 1 : 0,
+                  life: 1.15
+                });
+              }
+            } else {
+              b.fireCd = Math.max(0, (b.fireCd || 0) - dt);
+            }
+          }
+        }
+      }
+
+      // 4. Command Core emergency defense cannon
+      this._coreTurretCd = Math.max(0, (this._coreTurretCd || 0) - dt);
+      if (this._coreTurretCd <= 0) {
+        let nearest = null;
+        let bestD = 470;
+        for (let j = 0; j < this.enemies.length; j++) {
+          const e = this.enemies[j];
+          if (e.dead) continue;
+          const d = Math.hypot(e.x - this.base.x, e.y - this.base.y);
+          if (d < bestD) {
+            bestD = d;
+            nearest = e;
+          }
+        }
+        if (nearest) {
+          this._coreTurretCd = 0.62;
+          const ang = Math.atan2(nearest.y - this.base.y, nearest.x - this.base.x);
+          this.spawnBullet({
+            x: this.base.x + Math.cos(ang) * 52,
+            y: this.base.y + Math.sin(ang) * 52,
+            vx: Math.cos(ang) * 820,
+            vy: Math.sin(ang) * 820,
+            damage: 28,
+            radius: 4.0,
+            color: '#00f0ff',
+            fromPlayer: true,
+            life: 0.85
+          });
+        }
+      }
     }
 
     cancelUpgradeAnim() {
@@ -1357,6 +1594,7 @@ window.SG = window.SG || {};
       this.updateHUD();
     }
 
+
     completeAnomaly() {
       if (this.zone !== 'anomaly' || this.anomalyCleared) return;
       this.anomalyCleared = true;
@@ -1409,6 +1647,7 @@ window.SG = window.SG || {};
       this.updateHUD();
     }
 
+
     exitAnomalyToOverworld(toBase = false) {
       this.zone = 'overworld';
       this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
@@ -1460,6 +1699,7 @@ window.SG = window.SG || {};
       this.saveProgress('exit_anomaly');
       this.updateHUD();
     }
+
 
     ejectFromAnomalyOnDeath() {
       this.cancelUpgradeAnim();
@@ -1567,6 +1807,7 @@ window.SG = window.SG || {};
       this.updateHUD();
     }
 
+
     updateAnomalyRespawns(dt) {
       if (this.gameMode !== 'openworld' || !Array.isArray(this.anomalies) || this.anomalies.length === 0) return;
       let respawned = false;
@@ -1628,6 +1869,7 @@ window.SG = window.SG || {};
       this.saveProgress('return_base');
       this.updateHUD();
     }
+
 
     buildSaveSnapshot() {
       if (!this.player) return null;
@@ -1761,7 +2003,19 @@ window.SG = window.SG || {};
         radius: 64,
         repairRadius: 210
       };
-      this.buildings = Array.isArray(saved.world.buildings) ? saved.world.buildings : [];
+      this.buildings = (Array.isArray(saved.world.buildings) ? saved.world.buildings : []).map(b => {
+        const lvl = Math.max(1, Math.min(3, b.level || 1));
+        const maxHp = b.maxHp || (260 + (lvl - 1) * 140);
+        return {
+          ...b,
+          level: lvl,
+          maxHp,
+          hp: typeof b.hp === 'number' ? Math.max(0, Math.min(maxHp, b.hp)) : maxHp,
+          disabled: !!b.disabled,
+          angle: b.angle || 0,
+          fireCd: 0
+        };
+      });
       const savedMatter = (saved.world.resources && typeof saved.world.resources.matter === 'number')
         ? saved.world.resources.matter
         : 60;
@@ -1772,6 +2026,11 @@ window.SG = window.SG || {};
       this._basePulseTimer = 0;
       this._baseHpBonus = 0;
       this._baseShieldBonus = 0;
+      this._owPatrolTimer = 2.0;
+      this._raidTimer = 48;
+      this._raidActive = false;
+      this._raidRewardPending = null;
+      this._coreTurretCd = 0;
 
       if (saved.world.anomalies && saved.world.anomalies.length > 0) {
         this.anomalies = saved.world.anomalies.map(a => {
@@ -2804,6 +3063,7 @@ window.SG = window.SG || {};
       this.updateHUD();
     }
 
+
     openSubModal(dialogId, origin = 'playing') {
       this.clearInputs();
       this._subModalOrigin = origin;
@@ -2866,6 +3126,7 @@ window.SG = window.SG || {};
 
       for (let i = 0; i < list.length; i++) {
         const b = list[i];
+        if (b.disabled) continue;
         const lvl = Math.max(1, Math.min(3, b.level || 1));
         const def = BUILDING_DEFS.find(d => d.id === b.type);
         if (!def) continue;
@@ -2990,7 +3251,12 @@ window.SG = window.SG || {};
         type: typeId,
         x: Math.round(wx),
         y: Math.round(wy),
-        level: 1
+        level: 1,
+        hp: 260,
+        maxHp: 260,
+        disabled: false,
+        angle: 0,
+        fireCd: 0
       });
 
       this.syncBaseBonuses();
@@ -3014,6 +3280,9 @@ window.SG = window.SG || {};
 
       this.resources.matter = matter - cost;
       b.level += 1;
+      b.maxHp = 260 + (b.level - 1) * 140;
+      b.hp = b.maxHp;
+      b.disabled = false;
       this.syncBaseBonuses();
       this.particles.addShockwave(b.x, b.y, 110, '#ffd166', 0.4, 2.5);
       this.audio.playLevelUp();
@@ -4011,6 +4280,7 @@ window.SG = window.SG || {};
       this.waveSpawnTimer = 0.25;
       this.updateHUD();
     }
+
 
     spawnFromWaveQueue() {
       if (this.waveQueue.length === 0) return;
@@ -5032,6 +5302,7 @@ window.SG = window.SG || {};
       }
 
       if (this.zone === 'overworld') {
+        this.updateOverworldCombat(dt);
         // Peaceful Overworld: Base repair dock & Anomaly Dungeon entry portals
         const distBase = Math.hypot(this.player.x - this.base.x, this.player.y - this.base.y);
         const wasInBase = this.inBaseZone;
@@ -7113,8 +7384,17 @@ window.SG = window.SG || {};
           for (let i = 0; i < this.buildings.length; i++) {
             const b = this.buildings[i];
             const def = BUILDING_DEFS.find(d => d.id === b.type);
-            ctx.fillStyle = def ? def.color : '#22ffa6';
+            ctx.fillStyle = b.disabled ? '#ff4d6d' : (def ? def.color : '#22ffa6');
             ctx.fillRect(mx + b.x * scaleX - 1.8, my + b.y * scaleY - 1.8, 3.6, 3.6);
+          }
+        }
+
+        if (this.enemies && this.enemies.length > 0) {
+          for (let i = 0; i < this.enemies.length; i++) {
+            const e = this.enemies[i];
+            if (e.dead) continue;
+            ctx.fillStyle = e.isRaider ? '#ff3b6b' : '#ff9e2c';
+            ctx.fillRect(mx + e.x * scaleX - 1.5, my + e.y * scaleY - 1.5, 3, 3);
           }
         }
 

@@ -1138,8 +1138,10 @@ window.SG = window.SG || {};
     }
     e.inGravityWell = inWell;
 
-    const dxP = player.x - e.x;
-    const dyP = player.y - e.y;
+    const pDist = Math.hypot(player.x - e.x, player.y - e.y);
+    const useRaidTarget = !!(e.isRaider && e.raidTarget && pDist > 340);
+    const dxP = (useRaidTarget ? e.raidTarget.x : player.x) - e.x;
+    const dyP = (useRaidTarget ? e.raidTarget.y : player.y) - e.y;
     const distP = Math.hypot(dxP, dyP) || 1;
     const dirX = dxP / distP;
     const dirY = dyP / distP;

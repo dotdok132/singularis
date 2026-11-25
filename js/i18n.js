@@ -442,7 +442,15 @@ window.SG = window.SG || {};
       'build.repair_pylon.desc': 'Усиливает ремонт базы и повышает макс. корпус и щит на 8% за уровень (действует везде).',
       'build.xp_beacon.name': 'Орбитальный Маяк',
       'build.xp_beacon.short': 'МАЯК',
-      'build.xp_beacon.desc': 'Увеличивает весь получаемый опыт (+12%/ур.) и ускоряет появление новых разломов.'
+      'build.xp_beacon.desc': 'Увеличивает весь получаемый опыт (+12%/ур.) и ускоряет появление новых разломов.',
+      'build.laser_turret.name': 'Плазменная Турель',
+      'build.laser_turret.short': 'ТУРЕЛЬ',
+      'build.laser_turret.desc': 'Автоматически атакует патрули и рейдеров вокруг базы плазменными залпами.',
+      'build.damaged': 'ПОВРЕЖДЕНО',
+      'game.raidIncoming': 'ВНИМАНИЕ: РЕЙД НА БАЗУ!',
+      'game.raidIncomingSub': 'ВРАЖЕСКИЙ ОТРЯД ({n}) ИДЁТ К КОМАНДНОМУ ЯДРУ',
+      'game.raidCleared': 'РЕЙД ОТБИТ!',
+      'game.raidClearedSub': 'НАГРАДА ЗА ОБОРОНУ: +{matter} ⚡ • +{xp} XP'
     },
 
     uk: {
@@ -816,7 +824,15 @@ window.SG = window.SG || {};
       'build.repair_pylon.desc': 'Посилює ремонт бази та підвищує макс. корпус і щит на 8% за рівень (діє всюди).',
       'build.xp_beacon.name': 'Орбітальний Маяк',
       'build.xp_beacon.short': 'МАЯК',
-      'build.xp_beacon.desc': 'Збільшує весь отриманий досвід (+12%/рів.) та прискорює появу нових розломів.'
+      'build.xp_beacon.desc': 'Збільшує весь отриманий досвід (+12%/рів.) та прискорює появу нових розломів.',
+      'build.laser_turret.name': 'Плазмова Турель',
+      'build.laser_turret.short': 'ТУРЕЛЬ',
+      'build.laser_turret.desc': 'Автоматично атакує патрулі та рейдерів навколо бази плазмовими залпами.',
+      'build.damaged': 'ПОШКОДЖЕНО',
+      'game.raidIncoming': 'УВАГА: РЕЙД НА БАЗУ!',
+      'game.raidIncomingSub': 'ВОРОЖИЙ ЗАГІН ({n}) ЙДЕ ДО КОМАНДНОГО ЯДРА',
+      'game.raidCleared': 'РЕЙД ВІДБИТО!',
+      'game.raidClearedSub': 'НАГОРОДА ЗА ОБОРОНУ: +{matter} ⚡ • +{xp} XP'
     },
 
     en: {
@@ -1190,7 +1206,15 @@ window.SG = window.SG || {};
       'build.repair_pylon.desc': 'Boosts base repair and grants +8% Max HP & Shield per level everywhere.',
       'build.xp_beacon.name': 'Orbital Beacon',
       'build.xp_beacon.short': 'BEACON',
-      'build.xp_beacon.desc': 'Increases all XP gained (+12%/lv) and speeds up rift respawns.'
+      'build.xp_beacon.desc': 'Increases all XP gained (+12%/lv) and speeds up rift respawns.',
+      'build.laser_turret.name': 'Plasma Turret',
+      'build.laser_turret.short': 'TURRET',
+      'build.laser_turret.desc': 'Automatically engages patrols and raiders around the Base with plasma bolts.',
+      'build.damaged': 'OFFLINE',
+      'game.raidIncoming': 'WARNING: BASE RAID INCOMING!',
+      'game.raidIncomingSub': 'HOSTILE SQUAD ({n}) MARCHING ON COMMAND CORE',
+      'game.raidCleared': 'RAID REPELLED!',
+      'game.raidClearedSub': 'DEFENSE BONUS: +{matter} ⚡ • +{xp} XP'
     },
 
     es: {
@@ -1564,7 +1588,15 @@ window.SG = window.SG || {};
       'build.repair_pylon.desc': 'Mejora la reparación de la base y otorga +8% HP y Escudo máx. por nivel en todo lugar.',
       'build.xp_beacon.name': 'Baliza Orbital',
       'build.xp_beacon.short': 'BALIZA',
-      'build.xp_beacon.desc': 'Aumenta toda la XP obtenida (+12%/nv.) y acelera la reaparición de grietas.'
+      'build.xp_beacon.desc': 'Aumenta toda la XP obtenida (+12%/nv.) y acelera la reaparición de grietas.',
+      'build.laser_turret.name': 'Torreta de Plasma',
+      'build.laser_turret.short': 'TORRETA',
+      'build.laser_turret.desc': 'Ataca automáticamente patrullas y saqueadores alrededor de la Base con ráfagas de plasma.',
+      'build.damaged': 'DAÑADO',
+      'game.raidIncoming': '¡ALERTA: INCURSIÓN A LA BASE!',
+      'game.raidIncomingSub': 'ESCUADRÓN HOSTIL ({n}) AVANZANDO HACIA EL NÚCLEO',
+      'game.raidCleared': '¡INCURSIÓN REPELIDA!',
+      'game.raidClearedSub': 'BONO DE DEFENSA: +{matter} ⚡ • +{xp} XP'
     }
   };
 

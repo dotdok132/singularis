@@ -1170,6 +1170,61 @@ window.SG = window.SG || {};
         ctx.arc(0, 0, 19, 0, Math.PI * 2);
         ctx.fill();
       });
+
+      this.units.bld_laser_turret = makeSprite(160, (ctx) => {
+        // Heavy armored turret octagon
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4 + Math.PI / 8;
+          const px = Math.cos(a) * 62;
+          const py = Math.sin(a) * 62;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        const g = ctx.createRadialGradient(0, 0, 10, 0, 0, 62);
+        g.addColorStop(0, '#362328');
+        g.addColorStop(0.65, '#22151a');
+        g.addColorStop(1, '#100a0e');
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#080507';
+        ctx.stroke();
+
+        // 4 stabilizer legs with orange hazard plates
+        for (let q = 0; q < 4; q++) {
+          ctx.save();
+          ctx.rotate(q * Math.PI * 0.5 + Math.PI * 0.25);
+          ctx.fillStyle = '#26181e';
+          ctx.fillRect(30, -12, 28, 24);
+          ctx.strokeStyle = '#5e3843';
+          ctx.lineWidth = 1.6;
+          ctx.strokeRect(30, -12, 28, 24);
+          ctx.fillStyle = '#ff6b4a';
+          ctx.fillRect(46, -8, 6, 5);
+          ctx.fillRect(46, 3, 6, 5);
+          ctx.restore();
+        }
+
+        // Turret ring mount
+        ctx.beginPath();
+        ctx.arc(0, 0, 29, 0, Math.PI * 2);
+        ctx.fillStyle = '#181016';
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#ff6b4a';
+        ctx.stroke();
+
+        const cg = ctx.createRadialGradient(0, 0, 2, 0, 0, 20);
+        cg.addColorStop(0, '#fff2e6');
+        cg.addColorStop(0.45, '#ff6b4a');
+        cg.addColorStop(1, 'rgba(255, 107, 74, 0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        ctx.fill();
+      });
     },
 
     drawBase(ctx, base, nowSec, playerInRange, useSprites) {
@@ -1301,29 +1356,62 @@ window.SG = window.SG || {};
       const sprite = this.units && this.units[`bld_${b.type}`];
       const drawSz = 82 + (lvl - 1) * 4;
       if (sprite) {
+        if (b.disabled) ctx.globalAlpha = 0.45;
         ctx.drawImage(sprite, -drawSz * 0.5, -drawSz * 0.5, drawSz, drawSz);
+        ctx.globalAlpha = 1;
+      }
+
+      // Live rotating twin plasma cannon for turret
+      if (b.type === 'laser_turret') {
+        ctx.save();
+        ctx.rotate(b.angle || 0);
+        ctx.fillStyle = '#1a1116';
+        ctx.strokeStyle = b.disabled ? '#7f3d47' : '#ff6b4a';
+        ctx.lineWidth = 1.8;
+        ctx.fillRect(6, -10, 32, 7);
+        ctx.strokeRect(6, -10, 32, 7);
+        ctx.fillRect(6, 3, 32, 7);
+        ctx.strokeRect(6, 3, 32, 7);
+        if (!b.disabled) {
+          ctx.fillStyle = '#ffd166';
+          ctx.fillRect(30, -8.5, 6, 4);
+          ctx.fillRect(30, 4.5, 6, 4);
+        }
+        ctx.restore();
       }
 
       // Animated rotating energy ring & core pulse on top of texture
-      ctx.save();
-      ctx.rotate(nowSec * (0.75 + lvl * 0.2));
-      ctx.strokeStyle = col;
-      ctx.globalAlpha = 0.72;
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(0, 0, 38, 0, Math.PI * 0.55);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 0, 38, Math.PI, Math.PI * 1.55);
-      ctx.stroke();
-      ctx.restore();
+      if (!b.disabled) {
+        ctx.save();
+        ctx.rotate(nowSec * (0.75 + lvl * 0.2));
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.72;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, 38, 0, Math.PI * 0.55);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, 38, Math.PI, Math.PI * 1.55);
+        ctx.stroke();
+        ctx.restore();
+      }
 
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = b.disabled ? '#ff4d6d' : '#ffffff';
       ctx.globalAlpha = 0.5 + pulse * 0.45;
       ctx.beginPath();
       ctx.arc(0, 0, 4 + pulse * 2.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+
+      // Building HP bar when damaged
+      if (b.maxHp > 0 && b.hp < b.maxHp) {
+        const bw = 48;
+        const ratio = Math.max(0, Math.min(1, b.hp / b.maxHp));
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+        ctx.fillRect(-bw * 0.5, -58, bw, 5);
+        ctx.fillStyle = b.disabled ? '#ff4d6d' : '#22ffa6';
+        ctx.fillRect(-bw * 0.5, -58, bw * ratio, 5);
+      }
 
       // Level pips below structure
       for (let i = 0; i < lvl; i++) {
@@ -1335,10 +1423,10 @@ window.SG = window.SG || {};
       // Label & live rate
       ctx.textAlign = 'center';
       ctx.font = '800 10px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#e2f8ff';
+      ctx.fillStyle = b.disabled ? '#ff8fa3' : '#e2f8ff';
       const sName = tr(`build.${b.type}.short`, null, def.enShortName || def.shortName);
       const lvLabel = tr('build.lv', null, 'LV.');
-      ctx.fillText(`${sName} [${lvLabel}${lvl}]`, 0, -47);
+      ctx.fillText(b.disabled ? `${sName} [${tr('build.damaged', null, 'OFFLINE')}]` : `${sName} [${lvLabel}${lvl}]`, 0, -47);
 
       if (def.rateLabel) {
         ctx.font = '700 9.5px "JetBrains Mono", monospace';
