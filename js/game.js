@@ -4,7 +4,7 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v1.4.0';
+  SG.VERSION = 'v1.4.1';
 
   const DIFFICULTIES = {
     easy: { label: 'Кадет', enemyScale: 0.72, dmgScale: 0.75, xpMult: 1.25, scoreMult: 0.8 },
@@ -1611,8 +1611,9 @@ window.SG = window.SG || {};
       filtered.forEach(upg => {
         const curStack = this.upgradeStacks[upg.id] || 0;
         const isEvolved = !!(this.evolvedUpgrades && this.evolvedUpgrades.has(upg.id));
+        const reqMet = !SG.meetsUpgradeRequirements || SG.meetsUpgradeRequirements(upg, this.upgradeStacks);
         const card = document.createElement('article');
-        card.className = `catalog-card rarity-${upg.rarity}${this.getTagClass(upg)}${curStack > 0 ? ' owned' : ''}${isEvolved ? ' evolved' : ''}`;
+        card.className = `catalog-card rarity-${upg.rarity}${this.getTagClass(upg)}${curStack > 0 ? ' owned' : ''}${isEvolved ? ' evolved' : ''}${!reqMet ? ' locked-req' : ''}`;
         const stackText = isEvolved
           ? 'ЭВОЛЮЦИЯ АКТИВНА [MAX]'
           : (curStack > 0 ? `АКТИВЕН: ${curStack} / ${upg.maxStacks}` : `МАКС. УРОВЕНЬ: ${upg.maxStacks}`);
@@ -1622,6 +1623,9 @@ window.SG = window.SG || {};
             ? `<div class="upg-evo-box"><strong>ЭВОЛЮЦИЯ:</strong> ${upg.evolution.perk}</div>`
             : `<div class="upg-evo-hint">Макс. ур.: ${upg.evolution.title} — ${upg.evolution.perk}</div>`)
           : '';
+        const reqHtml = (upg.requiresLabel && !reqMet)
+          ? `<div class="upg-req-hint">Требуется: ${upg.requiresLabel}</div>`
+          : '';
         card.innerHTML = `
           <div class="upg-top">
             <span class="upg-tag">${upg.tag}</span>
@@ -1630,6 +1634,7 @@ window.SG = window.SG || {};
           <div class="upg-icon">${upg.icon}</div>
           <h3 class="upg-title">${displayTitle}</h3>
           <p class="upg-desc">${upg.desc}</p>
+          ${reqHtml}
           ${evoHtml}
           <div class="upg-stacks">${stackText}</div>
         `;
@@ -2451,7 +2456,7 @@ window.SG = window.SG || {};
       container.innerHTML = '';
 
       this.currentChoices = this.currentChoices.filter(
-        u => (this.upgradeStacks[u.id] || 0) < u.maxStacks && !this.evolvedUpgrades.has(u.id)
+        u => SG.isUpgradeEligible(u, this.upgradeStacks, this.evolvedUpgrades)
       );
 
       const anim = this.shouldAnimateUpgradeUI();
@@ -2540,7 +2545,7 @@ window.SG = window.SG || {};
       const chosenIdx = this.currentChoices.indexOf(upg);
       if (chosenIdx === -1) return;
       const prevStack = this.upgradeStacks[upg.id] || 0;
-      if (prevStack >= upg.maxStacks || this.evolvedUpgrades.has(upg.id)) return;
+      if (!SG.isUpgradeEligible(upg, this.upgradeStacks, this.evolvedUpgrades)) return;
 
       clearTimeout(this._aiUpgradeTimer);
       this._aiUpgradeTimer = null;

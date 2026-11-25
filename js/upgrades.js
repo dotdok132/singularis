@@ -1968,18 +1968,78 @@ window.SG = window.SG || {};
     }
   };
 
+  const PREREQUISITES = {
+    orbit_collider: { requires: ['orbit_trap'], label: 'Орбитальная Ловушка' },
+    orbit_mega_cap: { requires: ['orbit_trap'], label: 'Орбитальная Ловушка' },
+    orbit_turret_sparks: { requires: ['orbit_trap'], label: 'Орбитальная Ловушка' },
+    orbit_well_heal: { requires: ['orbit_trap'], label: 'Орбитальная Ловушка' },
+    orbit_zero_drag: { requires: ['orbit_trap'], label: 'Орбитальная Ловушка' },
+    chr_drone_laser: {
+      requires: [['lagrange_drones', 'drone_turrets', 'chr_drone_swarm']],
+      label: 'Любой модуль дронов'
+    },
+    aura_mastery: {
+      requires: [[
+        'aura_corona', 'aura_storm', 'aura_cryo', 'aura_repulse',
+        'aura_entropy', 'aura_nova', 'aura_radiation', 'aura_beam',
+        'aura_vortex_pull', 'aura_emp', 'aura_antimatter', 'aura_solar_flare'
+      ]],
+      label: 'Любая активная аура'
+    },
+    aura_overcharge: {
+      requires: [[
+        'aura_corona', 'aura_storm', 'aura_cryo', 'aura_repulse',
+        'aura_entropy', 'aura_nova', 'aura_radiation', 'aura_beam',
+        'aura_vortex_pull', 'aura_emp', 'aura_antimatter', 'aura_solar_flare'
+      ]],
+      label: 'Любая активная аура'
+    },
+    aura_thermal_shock: {
+      requires: [['aura_cryo', 'wpn_frost_rounds', 'aura_beam'], ['aura_corona', 'aura_solar_flare', 'wpn_ignite']],
+      label: 'Крио + Огонь/Корона'
+    },
+    aura_resonance_echo: {
+      requires: [['aura_storm', 'tesla_chain']],
+      label: 'Грозовой Ореол или Резонансная Дуга'
+    }
+  };
+
   UPGRADES.forEach(u => {
     u.evolution = EVOLUTIONS[u.id];
     if (!u.evolution) {
       throw new Error(`Missing evolution definition for upgrade: ${u.id}`);
     }
+    const prereq = PREREQUISITES[u.id];
+    if (prereq) {
+      u.requires = prereq.requires;
+      u.requiresLabel = prereq.label;
+    }
   });
+
+  function meetsUpgradeRequirements(upg, stacksMap) {
+    if (!upg || !upg.requires || upg.requires.length === 0) return true;
+    for (let i = 0; i < upg.requires.length; i++) {
+      const req = upg.requires[i];
+      if (Array.isArray(req)) {
+        if (!req.some(id => (stacksMap[id] || 0) > 0)) return false;
+      } else if ((stacksMap[req] || 0) <= 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function isUpgradeEligible(upg, stacksMap, evolvedSet = null) {
+    if (!upg) return false;
+    if ((stacksMap[upg.id] || 0) >= upg.maxStacks) return false;
+    if (evolvedSet && evolvedSet.has(upg.id)) return false;
+    return meetsUpgradeRequirements(upg, stacksMap);
+  }
 
   function countEligibleUpgrades(stacksMap, evolvedSet = null) {
     let total = 0;
     for (let i = 0; i < UPGRADES.length; i++) {
-      const u = UPGRADES[i];
-      if ((stacksMap[u.id] || 0) < u.maxStacks && !(evolvedSet && evolvedSet.has(u.id))) {
+      if (isUpgradeEligible(UPGRADES[i], stacksMap, evolvedSet)) {
         total++;
       }
     }
@@ -1987,9 +2047,7 @@ window.SG = window.SG || {};
   }
 
   function rollUpgradeChoices(stacksMap, count = 4, evolvedSet = null) {
-    const eligible = UPGRADES.filter(u =>
-      (stacksMap[u.id] || 0) < u.maxStacks && !(evolvedSet && evolvedSet.has(u.id))
-    );
+    const eligible = UPGRADES.filter(u => isUpgradeEligible(u, stacksMap, evolvedSet));
     const pool = eligible.map(u => {
       const s = stacksMap[u.id] || 0;
       const weight = (s + 1 === u.maxStacks) ? 3.2 : (s > 0 ? 2.1 : 1.0);
@@ -2016,6 +2074,8 @@ window.SG = window.SG || {};
   SG.UPGRADES = UPGRADES;
   SG.EVOLUTIONS = EVOLUTIONS;
   SG.createDefaultMods = createDefaultMods;
+  SG.meetsUpgradeRequirements = meetsUpgradeRequirements;
+  SG.isUpgradeEligible = isUpgradeEligible;
   SG.countEligibleUpgrades = countEligibleUpgrades;
   SG.rollUpgradeChoices = rollUpgradeChoices;
 })(window.SG);

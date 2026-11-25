@@ -1260,6 +1260,20 @@ dialog[open]::backdrop {
   opacity: 0.88;
 }
 
+.upg-req-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.09);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 6px;
+  padding: 3px 7px;
+}
+
+.catalog-card.locked-req {
+  opacity: 0.84;
+}
+
 .upgrade-pill.evolved {
   border-color: var(--gold);
   background: rgba(255, 184, 56, 0.14);
