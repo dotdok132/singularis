@@ -3064,9 +3064,14 @@ window.SG = window.SG || {};
         card.className = 'build-card';
         card.style.borderColor = `${def.color}55`;
 
+        const sprite = SG.Sprites && SG.Sprites.units && SG.Sprites.units[`bld_${def.id}`];
+        const thumbUrl = sprite && typeof sprite.toDataURL === 'function' ? sprite.toDataURL() : '';
         card.innerHTML = `
           <div class="build-card-top">
-            <span class="build-card-title" style="color:${def.color}">${def.name}</span>
+            <div class="build-card-title-wrap">
+              ${thumbUrl ? `<img class="build-card-icon" src="${thumbUrl}" alt="">` : ''}
+              <span class="build-card-title" style="color:${def.color}">${def.name}</span>
+            </div>
             <span class="build-card-count">${count} / ${def.maxCount}</span>
           </div>
           <div class="build-card-desc">${def.desc}</div>

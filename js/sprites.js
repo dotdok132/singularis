@@ -926,6 +926,250 @@ window.SG = window.SG || {};
         ctx.strokeStyle = '#00f0ff';
         ctx.stroke();
       });
+
+      // 8. Base Buildings (Mindustry-grade armored textures)
+      this.units.bld_xp_extractor = makeSprite(160, (ctx) => {
+        // Octagonal armored base plate
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4 + Math.PI / 8;
+          const px = Math.cos(a) * 66;
+          const py = Math.sin(a) * 66;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        const g = ctx.createRadialGradient(0, 0, 10, 0, 0, 68);
+        g.addColorStop(0, '#223847');
+        g.addColorStop(0.65, '#14222f');
+        g.addColorStop(1, '#0a111a');
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#070b12';
+        ctx.stroke();
+
+        // 4 cardinal extraction manifolds with emerald coolant channels
+        for (let q = 0; q < 4; q++) {
+          ctx.save();
+          ctx.rotate(q * Math.PI * 0.5);
+          ctx.fillStyle = '#0e1722';
+          ctx.fillRect(20, -13, 38, 26);
+          ctx.strokeStyle = '#334d63';
+          ctx.lineWidth = 1.8;
+          ctx.strokeRect(20, -13, 38, 26);
+          ctx.fillStyle = '#22ffa6';
+          ctx.fillRect(24, -4, 28, 8);
+          // Hazard tip
+          ctx.fillStyle = '#ffb838';
+          ctx.fillRect(52, -10, 5, 6);
+          ctx.fillRect(52, 4, 5, 6);
+          ctx.restore();
+        }
+
+        // Diagonal armor brackets + bolts
+        for (let q = 0; q < 4; q++) {
+          ctx.save();
+          ctx.rotate(q * Math.PI * 0.5 + Math.PI * 0.25);
+          ctx.fillStyle = '#1f3042';
+          ctx.fillRect(36, -11, 20, 22);
+          ctx.strokeStyle = '#090e16';
+          ctx.lineWidth = 1.6;
+          ctx.strokeRect(36, -11, 20, 22);
+          ctx.fillStyle = '#7df9ff';
+          ctx.fillRect(42, -2, 4, 4);
+          ctx.restore();
+        }
+
+        // Inner chamber ring
+        ctx.beginPath();
+        ctx.arc(0, 0, 28, 0, Math.PI * 2);
+        ctx.fillStyle = '#101b27';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#22ffa6';
+        ctx.stroke();
+
+        const cg = ctx.createRadialGradient(0, 0, 2, 0, 0, 22);
+        cg.addColorStop(0, '#ffffff');
+        cg.addColorStop(0.4, '#7dffcb');
+        cg.addColorStop(1, 'rgba(34, 255, 166, 0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      this.units.bld_matter_synth = makeSprite(160, (ctx) => {
+        // Heavy hexagonal forge chassis
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (k * Math.PI) / 3;
+          const px = Math.cos(a) * 66;
+          const py = Math.sin(a) * 66;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        const g = ctx.createRadialGradient(0, 0, 8, 0, 0, 66);
+        g.addColorStop(0, '#382c3e');
+        g.addColorStop(0.65, '#221c29');
+        g.addColorStop(1, '#100d15');
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#08060c';
+        ctx.stroke();
+
+        // 6 radiator fins + amber plasma conduits
+        for (let k = 0; k < 6; k++) {
+          ctx.save();
+          ctx.rotate((k * Math.PI) / 3 + Math.PI / 6);
+          ctx.fillStyle = '#181420';
+          ctx.fillRect(24, -9, 32, 18);
+          ctx.strokeStyle = '#4f415c';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(24, -9, 32, 18);
+          ctx.fillStyle = '#ffd166';
+          ctx.fillRect(27, -3, 24, 6);
+          ctx.restore();
+        }
+
+        // Inner containment hexagon
+        ctx.beginPath();
+        for (let k = 0; k < 6; k++) {
+          const a = (k * Math.PI) / 3 + Math.PI / 6;
+          const px = Math.cos(a) * 29;
+          const py = Math.sin(a) * 29;
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#1a1421';
+        ctx.fill();
+        ctx.lineWidth = 2.6;
+        ctx.strokeStyle = '#ffd166';
+        ctx.stroke();
+
+        const cg = ctx.createRadialGradient(0, 0, 2, 0, 0, 22);
+        cg.addColorStop(0, '#fff7d6');
+        cg.addColorStop(0.45, '#ffd166');
+        cg.addColorStop(1, 'rgba(255, 209, 102, 0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      this.units.bld_repair_pylon = makeSprite(160, (ctx) => {
+        // Armored circular foundation
+        const g = ctx.createRadialGradient(0, 0, 10, 0, 0, 64);
+        g.addColorStop(0, '#233b56');
+        g.addColorStop(0.7, '#152538');
+        g.addColorStop(1, '#0b131f');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, 64, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#070c14';
+        ctx.stroke();
+
+        // 4 heavy shield emitter bastions
+        for (let q = 0; q < 4; q++) {
+          ctx.save();
+          ctx.rotate(q * Math.PI * 0.5);
+          ctx.fillStyle = '#1d3048';
+          ctx.fillRect(18, -16, 44, 32);
+          ctx.strokeStyle = '#4c75a1';
+          ctx.lineWidth = 1.8;
+          ctx.strokeRect(18, -16, 44, 32);
+          ctx.fillStyle = '#00f0ff';
+          ctx.fillRect(24, -4, 32, 8);
+          ctx.fillStyle = '#22ffa6';
+          ctx.fillRect(50, -12, 6, 4);
+          ctx.fillRect(50, 8, 6, 4);
+          ctx.restore();
+        }
+
+        // Central diamond emitter core
+        ctx.beginPath();
+        ctx.moveTo(0, -28);
+        ctx.lineTo(28, 0);
+        ctx.lineTo(0, 28);
+        ctx.lineTo(-28, 0);
+        ctx.closePath();
+        ctx.fillStyle = '#14263b';
+        ctx.fill();
+        ctx.lineWidth = 2.6;
+        ctx.strokeStyle = '#00f0ff';
+        ctx.stroke();
+
+        const cg = ctx.createRadialGradient(0, 0, 2, 0, 0, 20);
+        cg.addColorStop(0, '#ffffff');
+        cg.addColorStop(0.45, '#7df9ff');
+        cg.addColorStop(1, 'rgba(0, 240, 255, 0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      this.units.bld_xp_beacon = makeSprite(160, (ctx) => {
+        // Dark titanium base ring
+        const g = ctx.createRadialGradient(0, 0, 8, 0, 0, 62);
+        g.addColorStop(0, '#2d234a');
+        g.addColorStop(0.7, '#1a1430');
+        g.addColorStop(1, '#0d0a1a');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, 60, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#070510';
+        ctx.stroke();
+
+        // 3 tri-wing phase dish pylons
+        for (let k = 0; k < 3; k++) {
+          ctx.save();
+          ctx.rotate((k * Math.PI * 2) / 3 - Math.PI / 2);
+          ctx.beginPath();
+          ctx.moveTo(16, -15);
+          ctx.lineTo(64, -8);
+          ctx.lineTo(64, 8);
+          ctx.lineTo(16, 15);
+          ctx.closePath();
+          ctx.fillStyle = '#241b40';
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#6e4fb8';
+          ctx.stroke();
+
+          ctx.fillStyle = '#c06cff';
+          ctx.fillRect(22, -3, 36, 6);
+          ctx.fillStyle = '#7df9ff';
+          ctx.fillRect(54, -6, 5, 12);
+          ctx.restore();
+        }
+
+        // Central singularity lens
+        ctx.beginPath();
+        ctx.arc(0, 0, 23, 0, Math.PI * 2);
+        ctx.fillStyle = '#120d24';
+        ctx.fill();
+        ctx.lineWidth = 2.6;
+        ctx.strokeStyle = '#c06cff';
+        ctx.stroke();
+
+        const cg = ctx.createRadialGradient(0, 0, 2, 0, 0, 19);
+        cg.addColorStop(0, '#ffffff');
+        cg.addColorStop(0.45, '#d79eff');
+        cg.addColorStop(1, 'rgba(192, 108, 255, 0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.arc(0, 0, 19, 0, Math.PI * 2);
+        ctx.fill();
+      });
     },
 
     drawBase(ctx, base, nowSec, playerInRange, useSprites) {
@@ -1047,69 +1291,57 @@ window.SG = window.SG || {};
 
       // Soft aura ring
       ctx.fillStyle = col;
-      ctx.globalAlpha = 0.09 + pulse * 0.06;
+      ctx.globalAlpha = 0.1 + pulse * 0.06;
       ctx.beginPath();
-      ctx.arc(0, 0, 34 + lvl * 3, 0, Math.PI * 2);
+      ctx.arc(0, 0, 44 + lvl * 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      // Outer rotating ring
-      ctx.save();
-      ctx.rotate(nowSec * (0.6 + lvl * 0.15));
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, 26, 0, Math.PI * 0.65);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 0, 26, Math.PI, Math.PI * 1.65);
-      ctx.stroke();
-      ctx.restore();
-
-      // Inner chassis polygon
-      const sides = b.type === 'xp_extractor' ? 4 : (b.type === 'matter_synth' ? 6 : (b.type === 'repair_pylon' ? 8 : 3));
-      ctx.save();
-      ctx.rotate(-nowSec * 0.35);
-      ctx.fillStyle = 'rgba(10, 18, 34, 0.92)';
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      for (let i = 0; i < sides; i++) {
-        const ang = (i / sides) * Math.PI * 2;
-        const r = 16;
-        const vx = Math.cos(ang) * r;
-        const vy = Math.sin(ang) * r;
-        if (i === 0) ctx.moveTo(vx, vy);
-        else ctx.lineTo(vx, vy);
+      // Pre-rendered Mindustry-style textured chassis sprite
+      const sprite = this.units && this.units[`bld_${b.type}`];
+      const drawSz = 82 + (lvl - 1) * 4;
+      if (sprite) {
+        ctx.drawImage(sprite, -drawSz * 0.5, -drawSz * 0.5, drawSz, drawSz);
       }
-      ctx.closePath();
-      ctx.fill();
+
+      // Animated rotating energy ring & core pulse on top of texture
+      ctx.save();
+      ctx.rotate(nowSec * (0.75 + lvl * 0.2));
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.72;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, 38, 0, Math.PI * 0.55);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, 38, Math.PI, Math.PI * 1.55);
       ctx.stroke();
       ctx.restore();
 
-      // Core gem
-      ctx.fillStyle = col;
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.5 + pulse * 0.45;
       ctx.beginPath();
-      ctx.arc(0, 0, 4.5 + pulse * 1.8, 0, Math.PI * 2);
+      ctx.arc(0, 0, 4 + pulse * 2.2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
 
       // Level pips below structure
       for (let i = 0; i < lvl; i++) {
         const ox = (i - (lvl - 1) * 0.5) * 9;
         ctx.fillStyle = '#ffd166';
-        ctx.fillRect(ox - 2.5, 29, 5, 3.5);
+        ctx.fillRect(ox - 2.5, 42, 5, 3.5);
       }
 
       // Label & live rate
       ctx.textAlign = 'center';
       ctx.font = '800 10px "JetBrains Mono", monospace';
       ctx.fillStyle = '#e2f8ff';
-      ctx.fillText(`${def.shortName} [УР.${lvl}]`, 0, -34);
+      ctx.fillText(`${def.shortName} [УР.${lvl}]`, 0, -47);
 
       if (def.rateLabel) {
         ctx.font = '700 9.5px "JetBrains Mono", monospace';
         ctx.fillStyle = col;
-        ctx.fillText(def.rateLabel(lvl), 0, 44);
+        ctx.fillText(def.rateLabel(lvl), 0, 57);
       }
 
       ctx.restore();
@@ -1137,12 +1369,16 @@ window.SG = window.SG || {};
       const col = valid ? '#22ffa6' : '#ff4d6d';
       const pulse = 0.7 + 0.3 * Math.sin(nowSec * 6);
       ctx.translate(x, y);
-      ctx.globalAlpha = 0.78 * pulse;
-      ctx.fillStyle = valid ? 'rgba(34, 255, 166, 0.16)' : 'rgba(255, 77, 109, 0.16)';
+      ctx.globalAlpha = 0.65 * pulse;
+      const sprite = this.units && this.units[`bld_${def.id}`];
+      if (sprite) {
+        ctx.drawImage(sprite, -41, -41, 82, 82);
+      }
+      ctx.fillStyle = valid ? 'rgba(34, 255, 166, 0.14)' : 'rgba(255, 77, 109, 0.22)';
       ctx.strokeStyle = col;
       ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.arc(0, 0, 28, 0, Math.PI * 2);
+      ctx.arc(0, 0, 42, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
@@ -1150,7 +1386,7 @@ window.SG = window.SG || {};
       ctx.textAlign = 'center';
       ctx.font = '800 10.5px "JetBrains Mono", monospace';
       ctx.fillStyle = col;
-      ctx.fillText(valid ? `ЛКМ: ${def.name}` : 'НЕЛЬЗЯ ПОСТРОИТЬ ЗДЕСЬ', 0, -36);
+      ctx.fillText(valid ? `ЛКМ: ${def.name}` : 'НЕЛЬЗЯ ПОСТРОИТЬ ЗДЕСЬ', 0, -49);
       ctx.restore();
     },
 
