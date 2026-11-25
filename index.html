@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>SINGULARIS — Архитектор Гравитации</title>
-  <link rel="stylesheet" href="styles.css?v=1.4.1">
+  <link rel="stylesheet" href="styles.css?v=1.5.0">
 </head>
 <body>
   <canvas id="gpu-canvas"></canvas>
@@ -69,7 +69,7 @@
     </div>
   </header>
   <div id="fps-badge" class="fps-badge" hidden>60 FPS • GPU</div>
-  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v1.4.1</div>
+  <div id="version-badge" class="version-badge" aria-label="Версия игры">SINGULARIS v1.5.0</div>
 
   <!-- Mobile / Tablet Twin-Stick & Ability Arc Controls -->
   <div id="touch-controls" class="touch-controls" hidden>
@@ -196,7 +196,7 @@
 
     <div class="title-footer">
       <div id="title-best-record" class="record-line"></div>
-      <span id="title-version" class="version-pill">Версия v1.4.1</span>
+      <span id="title-version" class="version-pill">Версия v1.5.0</span>
     </div>
   </dialog>
 
@@ -245,6 +245,16 @@
         </div>
         <div class="setting-control">
           <input type="checkbox" id="set-gpu" checked>
+        </div>
+      </label>
+
+      <label class="setting-row" for="set-textures">
+        <div class="setting-info">
+          <span class="setting-title">Текстуры (стиль Mindustry)</span>
+          <span class="setting-desc">Детализированные спрайты кораблей, врагов и сектора арены</span>
+        </div>
+        <div class="setting-control">
+          <input type="checkbox" id="set-textures" checked>
         </div>
       </label>
 
@@ -482,12 +492,13 @@
     </div>
   </dialog>
 
-  <script src="js/physics.js?v=1.4.1"></script>
-  <script src="js/gpu.js?v=1.4.1"></script>
-  <script src="js/audio.js?v=1.4.1"></script>
-  <script src="js/upgrades.js?v=1.4.1"></script>
-  <script src="js/entities.js?v=1.4.1"></script>
-  <script src="js/autopilot.js?v=1.4.1"></script>
-  <script src="js/game.js?v=1.4.1"></script>
+  <script src="js/physics.js?v=1.5.0"></script>
+  <script src="js/sprites.js?v=1.5.0"></script>
+  <script src="js/gpu.js?v=1.5.0"></script>
+  <script src="js/audio.js?v=1.5.0"></script>
+  <script src="js/upgrades.js?v=1.5.0"></script>
+  <script src="js/entities.js?v=1.5.0"></script>
+  <script src="js/autopilot.js?v=1.5.0"></script>
+  <script src="js/game.js?v=1.5.0"></script>
 </body>
 </html>

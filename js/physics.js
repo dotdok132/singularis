@@ -8,6 +8,8 @@ window.SG = window.SG || {};
     constructor(width, height, spacing = 38) {
       this.spacing = spacing;
       this.enabled = true;
+      this.worldX = -spacing;
+      this.worldY = -spacing;
       this.resize(width, height);
     }
 
@@ -23,8 +25,12 @@ window.SG = window.SG || {};
       const s = this.spacing;
       this.cols = Math.ceil(width / s) + 3;
       this.rows = Math.ceil(height / s) + 3;
-      this.offsetX = -s;
-      this.offsetY = -s;
+      const curCamX = this.worldX + s;
+      const curCamY = this.worldY + s;
+      this.worldX = Math.floor(curCamX / s) * s - s;
+      this.worldY = Math.floor(curCamY / s) * s - s;
+      this.offsetX = this.worldX;
+      this.offsetY = this.worldY;
 
       const count = this.cols * this.rows;
       this.rx = new Float32Array(count);
@@ -36,6 +42,13 @@ window.SG = window.SG || {};
       this.strain = new Float32Array(count);
       this.hueShift = new Float32Array(count);
 
+      this._spx = new Float32Array(count);
+      this._spy = new Float32Array(count);
+      this._svx = new Float32Array(count);
+      this._svy = new Float32Array(count);
+      this._sstrain = new Float32Array(count);
+      this._shue = new Float32Array(count);
+
       for (let r = 0; r < this.rows; r++) {
         for (let c = 0; c < this.cols; c++) {
           const i = r * this.cols + c;
@@ -45,6 +58,79 @@ window.SG = window.SG || {};
           this.ry[i] = y;
           this.px[i] = x;
           this.py[i] = y;
+        }
+      }
+    }
+
+    setViewOrigin(camX, camY) {
+      const s = this.spacing;
+      const newWX = Math.floor(camX / s) * s - s;
+      const newWY = Math.floor(camY / s) * s - s;
+      if (newWX === this.worldX && newWY === this.worldY) return;
+
+      const dc = Math.round((newWX - this.worldX) / s);
+      const dr = Math.round((newWY - this.worldY) / s);
+      const cols = this.cols;
+      const rows = this.rows;
+
+      this.worldX = newWX;
+      this.worldY = newWY;
+      this.offsetX = newWX;
+      this.offsetY = newWY;
+
+      if (Math.abs(dc) >= cols - 2 || Math.abs(dr) >= rows - 2) {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const i = r * cols + c;
+            const x = newWX + c * s;
+            const y = newWY + r * s;
+            this.rx[i] = x;
+            this.ry[i] = y;
+            this.px[i] = x;
+            this.py[i] = y;
+            this.vx[i] = 0;
+            this.vy[i] = 0;
+            this.strain[i] = 0;
+            this.hueShift[i] = 0;
+          }
+        }
+        return;
+      }
+
+      this._spx.set(this.px);
+      this._spy.set(this.py);
+      this._svx.set(this.vx);
+      this._svy.set(this.vy);
+      this._sstrain.set(this.strain);
+      this._shue.set(this.hueShift);
+
+      for (let r = 0; r < rows; r++) {
+        const srcR = r + dr;
+        const rowOff = r * cols;
+        for (let c = 0; c < cols; c++) {
+          const i = rowOff + c;
+          const restX = newWX + c * s;
+          const restY = newWY + r * s;
+          this.rx[i] = restX;
+          this.ry[i] = restY;
+
+          const srcC = c + dc;
+          if (srcR >= 1 && srcR < rows - 1 && srcC >= 1 && srcC < cols - 1 && r >= 1 && r < rows - 1 && c >= 1 && c < cols - 1) {
+            const si = srcR * cols + srcC;
+            this.px[i] = this._spx[si];
+            this.py[i] = this._spy[si];
+            this.vx[i] = this._svx[si];
+            this.vy[i] = this._svy[si];
+            this.strain[i] = this._sstrain[si];
+            this.hueShift[i] = this._shue[si];
+          } else {
+            this.px[i] = restX;
+            this.py[i] = restY;
+            this.vx[i] = 0;
+            this.vy[i] = 0;
+            this.strain[i] = 0;
+            this.hueShift[i] = 0;
+          }
         }
       }
     }

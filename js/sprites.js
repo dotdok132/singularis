@@ -1,0 +1,824 @@
+// SINGULARIS — Mindustry-Style Procedural Industrial Texture & Sprite Atlas
+window.SG = window.SG || {};
+
+(function (SG) {
+  'use strict';
+
+  const Sprites = {
+    ready: false,
+    units: {},
+    flash: {},
+    floorTile: null,
+    _patternCache: new WeakMap(),
+
+    init() {
+      if (this.ready || typeof document === 'undefined') return;
+      try {
+        this.units.player = this._buildPlayer('#00f0ff', '#7df9ff');
+        this.units.player_bt = this._buildPlayer('#d98aff', '#f5d0fe');
+        this.units.drone = this._buildDrone();
+        this.units.swarmer = this._buildSwarmer();
+        this.units.sniper = this._buildSniper();
+        this.units.phalanx = this._buildPhalanx();
+        this.units.pulsar = this._buildPulsar();
+        this.units.weaver = this._buildWeaver();
+        this.units.boss_leviathan_head = this._buildLeviathanHead();
+        this.units.boss_leviathan_seg = this._buildLeviathanSeg();
+        this.units.boss_archon_gold = this._buildArchonCore('#ffb838', '#fff0b8');
+        this.units.boss_archon_violet = this._buildArchonCore('#c06cff', '#f3d1ff');
+        this.units.pickup_xp = this._buildXpCrystal();
+        this.units.pickup_heal = this._buildHealPod();
+
+        const flashKeys = [
+          'swarmer', 'sniper', 'phalanx', 'pulsar', 'weaver',
+          'boss_leviathan_head', 'boss_leviathan_seg',
+          'boss_archon_gold', 'boss_archon_violet'
+        ];
+        for (const k of flashKeys) {
+          this.flash[k] = this._makeFlashVariant(this.units[k]);
+        }
+
+        this.floorTile = this._buildFloorTile();
+        this.ready = true;
+      } catch (_) {
+        this.ready = false;
+      }
+    },
+
+    _makeCanvas(w, h, drawFn) {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      drawFn(ctx, w, h);
+      return c;
+    },
+
+    _makeFlashVariant(src) {
+      return this._makeCanvas(src.width, src.height, (ctx, w, h) => {
+        ctx.drawImage(src, 0, 0);
+        ctx.globalCompositeOperation = 'source-atop';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+      });
+    },
+
+    _drawRivets(ctx, pts, col = '#7f98bd', r = 1.4) {
+      ctx.fillStyle = col;
+      for (let i = 0; i < pts.length; i++) {
+        ctx.beginPath();
+        ctx.arc(pts[i][0], pts[i][1], r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    },
+
+    _buildPlayer(coreCol, highlightCol) {
+      return this._makeCanvas(96, 96, (ctx) => {
+        ctx.translate(48, 48);
+
+        // Twin rear thruster housings
+        ctx.fillStyle = '#1b2436';
+        ctx.strokeStyle = '#0c101b';
+        ctx.lineWidth = 2.6;
+        for (const sgn of [-1, 1]) {
+          ctx.fillRect(-30, sgn * 11 - 5, 14, 10);
+          ctx.strokeRect(-30, sgn * 11 - 5, 14, 10);
+          ctx.fillStyle = coreCol;
+          ctx.fillRect(-32, sgn * 11 - 3, 4, 6);
+          ctx.fillStyle = '#1b2436';
+        }
+
+        // Twin forward rail-barrels
+        ctx.fillStyle = '#475b7a';
+        ctx.strokeStyle = '#0c101b';
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.rect(10, sgn * 10 - 3, 24, 6);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = highlightCol;
+          ctx.fillRect(28, sgn * 10 - 1.5, 5, 3);
+          ctx.fillStyle = '#475b7a';
+        }
+
+        // Main swept delta hull
+        ctx.beginPath();
+        ctx.moveTo(35, 0);
+        ctx.lineTo(6, 14);
+        ctx.lineTo(-16, 28);
+        ctx.lineTo(-28, 22);
+        ctx.lineTo(-19, 8);
+        ctx.lineTo(-24, 0);
+        ctx.lineTo(-19, -8);
+        ctx.lineTo(-28, -22);
+        ctx.lineTo(-16, -28);
+        ctx.lineTo(6, -14);
+        ctx.closePath();
+        ctx.fillStyle = '#2b3850';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#0c101b';
+        ctx.stroke();
+
+        // Inner armored dorsal plating
+        ctx.beginPath();
+        ctx.moveTo(27, 0);
+        ctx.lineTo(4, 10);
+        ctx.lineTo(-14, 18);
+        ctx.lineTo(-18, 0);
+        ctx.lineTo(-14, -18);
+        ctx.lineTo(4, -10);
+        ctx.closePath();
+        ctx.fillStyle = '#435778';
+        ctx.fill();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#6c87b0';
+        ctx.stroke();
+
+        // Recessed wing vents
+        ctx.fillStyle = '#151d2e';
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(-4, sgn * 12);
+          ctx.lineTo(-18, sgn * 20);
+          ctx.lineTo(-21, sgn * 16);
+          ctx.lineTo(-8, sgn * 9);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Glowing Quantum Core & cockpit visor
+        const grad = ctx.createRadialGradient(2, 0, 1, 2, 0, 11);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.42, highlightCol);
+        grad.addColorStop(1, coreCol);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(14, 0);
+        ctx.lineTo(2, 6);
+        ctx.lineTo(-6, 0);
+        ctx.lineTo(2, -6);
+        ctx.closePath();
+        ctx.fill();
+
+        this._drawRivets(ctx, [[-11, -13], [-11, 13], [4, -7], [4, 7]], '#8fa9cf', 1.3);
+      });
+    },
+
+    _buildDrone() {
+      return this._makeCanvas(44, 44, (ctx) => {
+        ctx.translate(22, 22);
+        ctx.fillStyle = '#4e6587';
+        ctx.strokeStyle = '#0c101b';
+        ctx.lineWidth = 2;
+        ctx.fillRect(4, -2.5, 13, 5);
+        ctx.strokeRect(4, -2.5, 13, 5);
+
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3;
+          const x = Math.cos(a) * 11;
+          const y = Math.sin(a) * 11;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#33425c';
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#00f0ff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    },
+
+    _buildSwarmer() {
+      return this._makeCanvas(72, 72, (ctx) => {
+        ctx.translate(36, 36);
+        // Flare-inspired interceptor hull
+        ctx.beginPath();
+        ctx.moveTo(26, 0);
+        ctx.lineTo(4, 10);
+        ctx.lineTo(-14, 23);
+        ctx.lineTo(-22, 16);
+        ctx.lineTo(-12, 5);
+        ctx.lineTo(-20, 0);
+        ctx.lineTo(-12, -5);
+        ctx.lineTo(-22, -16);
+        ctx.lineTo(-14, -23);
+        ctx.lineTo(4, -10);
+        ctx.closePath();
+        ctx.fillStyle = '#323a4f';
+        ctx.fill();
+        ctx.lineWidth = 2.8;
+        ctx.strokeStyle = '#0e121c';
+        ctx.stroke();
+
+        // Crimson armored wing plates
+        ctx.beginPath();
+        ctx.moveTo(19, 0);
+        ctx.lineTo(-2, 8);
+        ctx.lineTo(-12, 14);
+        ctx.lineTo(-9, 0);
+        ctx.lineTo(-12, -14);
+        ctx.lineTo(-2, -8);
+        ctx.closePath();
+        ctx.fillStyle = '#68263b';
+        ctx.fill();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#a83c5b';
+        ctx.stroke();
+
+        // Glowing core slit
+        ctx.fillStyle = '#ff3b6b';
+        ctx.beginPath();
+        ctx.moveTo(12, 0);
+        ctx.lineTo(0, 4.5);
+        ctx.lineTo(-5, 0);
+        ctx.lineTo(0, -4.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffd1dc';
+        ctx.fillRect(1, -1.5, 6, 3);
+      });
+    },
+
+    _buildSniper() {
+      return this._makeCanvas(88, 88, (ctx) => {
+        ctx.translate(44, 44);
+        // Long accelerator railgun barrel
+        ctx.fillStyle = '#2b3347';
+        ctx.strokeStyle = '#0c101b';
+        ctx.lineWidth = 2.6;
+        ctx.fillRect(0, -5, 36, 10);
+        ctx.strokeRect(0, -5, 36, 10);
+
+        // Side armor wings
+        ctx.beginPath();
+        ctx.moveTo(14, 0);
+        ctx.lineTo(-6, 22);
+        ctx.lineTo(-24, 18);
+        ctx.lineTo(-28, 0);
+        ctx.lineTo(-24, -18);
+        ctx.lineTo(-6, -22);
+        ctx.closePath();
+        ctx.fillStyle = '#38435c';
+        ctx.fill();
+        ctx.stroke();
+
+        // Dorsal cap
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(-8, 12);
+        ctx.lineTo(-20, 0);
+        ctx.lineTo(-8, -12);
+        ctx.closePath();
+        ctx.fillStyle = '#5a4836';
+        ctx.fill();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#99744d';
+        ctx.stroke();
+
+        // Capacitor coils along barrel
+        ctx.fillStyle = '#ff9e2c';
+        for (let bx = 8; bx <= 26; bx += 7) {
+          ctx.fillRect(bx, -3, 3.5, 6);
+        }
+        ctx.fillStyle = '#fff3d6';
+        ctx.beginPath();
+        ctx.arc(-4, 0, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        this._drawRivets(ctx, [[-16, -11], [-16, 11], [-6, -15], [-6, 15]], '#9fb0cc', 1.3);
+      });
+    },
+
+    _buildPhalanx() {
+      return this._makeCanvas(96, 96, (ctx) => {
+        ctx.translate(48, 48);
+        // Twin heavy shoulder cannons
+        ctx.fillStyle = '#475c7a';
+        ctx.strokeStyle = '#0c101b';
+        ctx.lineWidth = 2.6;
+        for (const sgn of [-1, 1]) {
+          ctx.fillRect(8, sgn * 17 - 4, 20, 8);
+          ctx.strokeRect(8, sgn * 17 - 4, 20, 8);
+        }
+
+        // Heavy hexagonal armored body
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3;
+          const x = Math.cos(a) * 28;
+          const y = Math.sin(a) * 28;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#28384f';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Inner beveled steel turret plate
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3;
+          const x = Math.cos(a) * 18;
+          const y = Math.sin(a) * 18;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#3c5678';
+        ctx.fill();
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = '#6da7d9';
+        ctx.stroke();
+
+        // Shield emitter core
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(2, 0, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e0f7ff';
+        ctx.beginPath();
+        ctx.arc(2, 0, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+        this._drawRivets(ctx, [[-12, -18], [-12, 18], [10, -18], [10, 18]], '#8ab8e6', 1.5);
+      });
+    },
+
+    _buildPulsar() {
+      return this._makeCanvas(88, 88, (ctx) => {
+        ctx.translate(44, 44);
+        // 4 armored pylons (Quasar-inspired)
+        ctx.fillStyle = '#2d2945';
+        ctx.strokeStyle = '#0c101b';
+        ctx.lineWidth = 2.6;
+        for (let i = 0; i < 4; i++) {
+          ctx.save();
+          ctx.rotate((i * Math.PI) / 2);
+          ctx.beginPath();
+          ctx.moveTo(10, -8);
+          ctx.lineTo(29, -4);
+          ctx.lineTo(29, 4);
+          ctx.lineTo(10, 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#c06cff';
+          ctx.fillRect(21, -2.5, 5, 5);
+          ctx.fillStyle = '#2d2945';
+          ctx.restore();
+        }
+
+        // Central octagonal core frame
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4 + Math.PI / 8;
+          const x = Math.cos(a) * 18;
+          const y = Math.sin(a) * 18;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#403663';
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#d98aff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    },
+
+    _buildWeaver() {
+      return this._makeCanvas(80, 80, (ctx) => {
+        ctx.translate(40, 40);
+        // Diamond stealth hull
+        ctx.beginPath();
+        ctx.moveTo(26, 0);
+        ctx.lineTo(0, 22);
+        ctx.lineTo(-24, 0);
+        ctx.lineTo(0, -22);
+        ctx.closePath();
+        ctx.fillStyle = '#1f3638';
+        ctx.fill();
+        ctx.lineWidth = 2.8;
+        ctx.strokeStyle = '#0c101b';
+        ctx.stroke();
+
+        // Inner angular armor fins
+        ctx.beginPath();
+        ctx.moveTo(17, 0);
+        ctx.lineTo(0, 12);
+        ctx.lineTo(-14, 0);
+        ctx.lineTo(0, -12);
+        ctx.closePath();
+        ctx.fillStyle = '#2c5454';
+        ctx.fill();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#4fb39b';
+        ctx.stroke();
+
+        ctx.fillStyle = '#22ffa6';
+        ctx.beginPath();
+        ctx.arc(2, 0, 5.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e6fff5';
+        ctx.fillRect(0, -1.8, 5, 3.6);
+      });
+    },
+
+    _buildLeviathanHead() {
+      return this._makeCanvas(160, 160, (ctx) => {
+        ctx.translate(80, 80);
+        // Serrated crimson mandibles
+        ctx.fillStyle = '#572234';
+        ctx.strokeStyle = '#0b0e17';
+        ctx.lineWidth = 3.2;
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(22, sgn * 16);
+          ctx.lineTo(66, sgn * 32);
+          ctx.lineTo(44, sgn * 10);
+          ctx.lineTo(24, sgn * 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Main armored carapace
+        ctx.beginPath();
+        ctx.moveTo(54, 0);
+        ctx.lineTo(14, 38);
+        ctx.lineTo(-34, 42);
+        ctx.lineTo(-48, 18);
+        ctx.lineTo(-40, 0);
+        ctx.lineTo(-48, -18);
+        ctx.lineTo(-34, -42);
+        ctx.lineTo(14, -38);
+        ctx.closePath();
+        ctx.fillStyle = '#291f30';
+        ctx.fill();
+        ctx.stroke();
+
+        // Layered dorsal titanium plates
+        ctx.beginPath();
+        ctx.moveTo(40, 0);
+        ctx.lineTo(8, 25);
+        ctx.lineTo(-28, 22);
+        ctx.lineTo(-22, 0);
+        ctx.lineTo(-28, -22);
+        ctx.lineTo(8, -25);
+        ctx.closePath();
+        ctx.fillStyle = '#4a263b';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ff3b6b';
+        ctx.stroke();
+
+        // Twin optic cores & central reactor
+        ctx.fillStyle = '#ff2a5f';
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.arc(20, sgn * 13, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#ffd1dc';
+        ctx.beginPath();
+        ctx.arc(2, 0, 8, 0, Math.PI * 2);
+        ctx.fill();
+        this._drawRivets(ctx, [[-18, -28], [-18, 28], [-4, -30], [-4, 30], [-28, -12], [-28, 12]], '#c97b93', 2.0);
+      });
+    },
+
+    _buildLeviathanSeg() {
+      return this._makeCanvas(120, 120, (ctx) => {
+        ctx.translate(60, 60);
+        // Lateral spine fins
+        ctx.fillStyle = '#381d2c';
+        ctx.strokeStyle = '#0b0e17';
+        ctx.lineWidth = 2.8;
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(12, sgn * 24);
+          ctx.lineTo(-18, sgn * 48);
+          ctx.lineTo(-24, sgn * 28);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Armored hexagonal body ring
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4;
+          const x = Math.cos(a) * 34;
+          const y = Math.sin(a) * 34;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#251a2b';
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 21, 0, Math.PI * 2);
+        ctx.fillStyle = '#472136';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ff2a5f';
+        ctx.stroke();
+
+        ctx.fillStyle = '#ff6b8b';
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    },
+
+    _buildArchonCore(mainCol, brightCol) {
+      return this._makeCanvas(128, 128, (ctx) => {
+        ctx.translate(64, 64);
+        // 8 radiating armored turbine fins
+        ctx.fillStyle = '#2f2b42';
+        ctx.strokeStyle = '#0c0f1a';
+        ctx.lineWidth = 2.6;
+        for (let i = 0; i < 8; i++) {
+          ctx.save();
+          ctx.rotate((i * Math.PI) / 4);
+          ctx.beginPath();
+          ctx.moveTo(18, -7);
+          ctx.lineTo(48, -4);
+          ctx.lineTo(48, 4);
+          ctx.lineTo(18, 7);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = mainCol;
+          ctx.fillRect(36, -2, 8, 4);
+          ctx.fillStyle = '#2f2b42';
+          ctx.restore();
+        }
+
+        // Heavy octagonal core housing
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4 + Math.PI / 8;
+          const x = Math.cos(a) * 30;
+          const y = Math.sin(a) * 30;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#211d33';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 17, 0, Math.PI * 2);
+        ctx.fillStyle = mainCol;
+        ctx.fill();
+        ctx.fillStyle = brightCol;
+        ctx.beginPath();
+        ctx.arc(0, 0, 9, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    },
+
+    _buildXpCrystal() {
+      return this._makeCanvas(36, 36, (ctx) => {
+        ctx.translate(18, 18);
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.lineTo(10, 0);
+        ctx.lineTo(0, 12);
+        ctx.lineTo(-10, 0);
+        ctx.closePath();
+        ctx.fillStyle = '#00d98b';
+        ctx.fill();
+        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = '#08241d';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, -7);
+        ctx.lineTo(5, 0);
+        ctx.lineTo(0, 7);
+        ctx.lineTo(-5, 0);
+        ctx.closePath();
+        ctx.fillStyle = '#a7ffdf';
+        ctx.fill();
+      });
+    },
+
+    _buildHealPod() {
+      return this._makeCanvas(44, 44, (ctx) => {
+        ctx.translate(22, 22);
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
+        ctx.fillStyle = '#233b42';
+        ctx.fill();
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = '#0c141c';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#18b87a';
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-6, -2.2, 12, 4.4);
+        ctx.fillRect(-2.2, -6, 4.4, 12);
+      });
+    },
+
+    _buildFloorTile() {
+      return this._makeCanvas(256, 256, (ctx) => {
+        ctx.fillStyle = '#060a14';
+        ctx.fillRect(0, 0, 256, 256);
+
+        const cell = 64;
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            const x = c * cell;
+            const y = r * cell;
+            const alt = ((r + c) & 1) === 0;
+            ctx.fillStyle = alt ? '#09101f' : '#0b1324';
+            ctx.fillRect(x + 2, y + 2, cell - 4, cell - 4);
+
+            // Bevel top-left highlight & bottom-right shadow
+            ctx.strokeStyle = 'rgba(110, 150, 210, 0.08)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + 2.5, y + cell - 3);
+            ctx.lineTo(x + 2.5, y + 2.5);
+            ctx.lineTo(x + cell - 3, y + 2.5);
+            ctx.stroke();
+
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.beginPath();
+            ctx.moveTo(x + cell - 2.5, y + 3);
+            ctx.lineTo(x + cell - 2.5, y + cell - 2.5);
+            ctx.lineTo(x + 3, y + cell - 2.5);
+            ctx.stroke();
+
+            // Corner bolts
+            ctx.fillStyle = 'rgba(120, 160, 220, 0.14)';
+            ctx.fillRect(x + 6, y + 6, 2, 2);
+            ctx.fillRect(x + cell - 8, y + 6, 2, 2);
+            ctx.fillRect(x + 6, y + cell - 8, 2, 2);
+            ctx.fillRect(x + cell - 8, y + cell - 8, 2, 2);
+
+            // Vent grates on specific industrial tiles
+            if ((r === 1 && c === 2) || (r === 3 && c === 0)) {
+              ctx.fillStyle = 'rgba(3, 6, 12, 0.72)';
+              for (let vy = 16; vy <= 44; vy += 7) {
+                ctx.fillRect(x + 14, y + vy, 36, 3.5);
+              }
+            }
+
+            // Subtle glowing conduit lines
+            if ((r === 0 && c === 1) || (r === 2 && c === 3)) {
+              ctx.strokeStyle = 'rgba(0, 240, 255, 0.09)';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(x + 10, y + 32);
+              ctx.lineTo(x + 54, y + 32);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Major 256px sector boundary seam
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(0.5, 0.5, 255, 255);
+      });
+    },
+
+    getFloorPattern(ctx) {
+      if (!this.floorTile) return null;
+      let pat = this._patternCache.get(ctx);
+      if (!pat) {
+        pat = ctx.createPattern(this.floorTile, 'repeat');
+        if (pat) this._patternCache.set(ctx, pat);
+      }
+      return pat;
+    },
+
+    drawUnit(ctx, key, x, y, angle, drawSize, hitFlash = 0, alpha = 1) {
+      const img = this.units[key];
+      if (!img) return;
+      const half = drawSize * 0.5;
+      ctx.save();
+      ctx.translate(x, y);
+      if (angle !== 0) ctx.rotate(angle);
+      if (alpha < 0.999) ctx.globalAlpha = alpha;
+      ctx.drawImage(img, -half, -half, drawSize, drawSize);
+      if (hitFlash > 0.02 && this.flash[key]) {
+        ctx.globalAlpha = Math.min(0.85, hitFlash * 0.78) * alpha;
+        ctx.drawImage(this.flash[key], -half, -half, drawSize, drawSize);
+      }
+      ctx.restore();
+    },
+
+    drawLandmarks(ctx, camX, camY, vpW, vpH, landmarks, isSlow) {
+      if (!landmarks || landmarks.length === 0) return;
+      for (let i = 0; i < landmarks.length; i++) {
+        const lm = landmarks[i];
+        const r = lm.radius;
+        if (lm.x + r < camX - 40 || lm.x - r > camX + vpW + 40 || lm.y + r < camY - 40 || lm.y - r > camY + vpH + 40) {
+          continue;
+        }
+        ctx.save();
+        ctx.translate(lm.x, lm.y);
+        const col = isSlow ? 'rgba(185, 92, 255, 0.22)' : 'rgba(0, 240, 255, 0.16)';
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        if (lm.kind === 0) {
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([8, 8]);
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.65, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (lm.kind === 1) {
+          ctx.strokeRect(-r * 0.72, -r * 0.72, r * 1.44, r * 1.44);
+          ctx.beginPath();
+          ctx.moveTo(-r * 0.5, 0); ctx.lineTo(r * 0.5, 0);
+          ctx.moveTo(0, -r * 0.5); ctx.lineTo(0, r * 0.5);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          for (let k = 0; k < 6; k++) {
+            const a = (k * Math.PI) / 3;
+            const px = Math.cos(a) * r * 0.85;
+            const py = Math.sin(a) * r * 0.85;
+            if (k === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.fillStyle = isSlow ? 'rgba(217, 138, 255, 0.26)' : 'rgba(125, 249, 255, 0.22)';
+        ctx.font = '700 10px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(lm.label, 0, r + 14);
+        ctx.restore();
+      }
+    },
+
+    drawFloor(ctx, camX, camY, vpW, vpH, bounds, landmarks, isSlow) {
+      const pat = this.getFloorPattern(ctx);
+      if (pat) {
+        ctx.fillStyle = pat;
+        ctx.fillRect(camX - 2, camY - 2, vpW + 4, vpH + 4);
+      } else {
+        ctx.fillStyle = isSlow ? '#0a071a' : '#050914';
+        ctx.fillRect(camX - 2, camY - 2, vpW + 4, vpH + 4);
+      }
+      if (isSlow) {
+        ctx.fillStyle = 'rgba(110, 50, 210, 0.14)';
+        ctx.fillRect(camX - 2, camY - 2, vpW + 4, vpH + 4);
+      }
+      this.drawLandmarks(ctx, camX, camY, vpW, vpH, landmarks, isSlow);
+    },
+
+    drawPerimeter(ctx, bounds, camX, camY, vpW, vpH, nowSec) {
+      const margin = 40;
+      const nearLeft = camX < margin;
+      const nearTop = camY < margin;
+      const nearRight = camX + vpW > bounds.width - margin;
+      const nearBottom = camY + vpH > bounds.height - margin;
+      if (!nearLeft && !nearTop && !nearRight && !nearBottom) return;
+
+      ctx.save();
+      const pulse = 0.55 + 0.25 * Math.sin(nowSec * 3.5);
+      ctx.strokeStyle = `rgba(255, 59, 107, ${pulse.toFixed(2)})`;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, bounds.width - 4, bounds.height - 4);
+
+      ctx.strokeStyle = 'rgba(255, 184, 56, 0.72)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([18, 14]);
+      ctx.strokeRect(10, 10, bounds.width - 20, bounds.height - 20);
+      ctx.restore();
+    }
+  };
+
+  SG.Sprites = Sprites;
+})(window.SG);

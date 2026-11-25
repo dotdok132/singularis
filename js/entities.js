@@ -598,7 +598,10 @@ window.SG = window.SG || {};
       this.recordState(dt);
     }
 
-    render(ctx) {
+    render(ctx, opts = {}) {
+      const useSprites = !!(opts.useSprites && SG.Sprites && SG.Sprites.ready);
+      const skipAuras = !!opts.skipAuras;
+
       // Temporal rewind tether anchor indicator (3s ago ghost)
       if (this.history.length > 15 && this.rewindCooldown <= 0) {
         const ghost = this.history[0];
@@ -616,15 +619,19 @@ window.SG = window.SG || {};
       // Afterimages
       for (let i = 0; i < this.afterimages.length; i++) {
         const a = this.afterimages[i];
-        ctx.save();
-        ctx.translate(a.x, a.y);
-        ctx.rotate(a.angle);
-        ctx.globalAlpha = a.alpha;
-        ctx.strokeStyle = a.color;
-        ctx.lineWidth = 1.8;
-        this.traceShipPath(ctx);
-        ctx.stroke();
-        ctx.restore();
+        if (useSprites) {
+          SG.Sprites.drawUnit(ctx, this.bulletTimeActive ? 'player_bt' : 'player', a.x, a.y, a.angle, 44, 0, a.alpha * 0.55);
+        } else {
+          ctx.save();
+          ctx.translate(a.x, a.y);
+          ctx.rotate(a.angle);
+          ctx.globalAlpha = a.alpha;
+          ctx.strokeStyle = a.color;
+          ctx.lineWidth = 1.8;
+          this.traceShipPath(ctx);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
 
       // Paradox clones
@@ -644,7 +651,7 @@ window.SG = window.SG || {};
       }
 
       // Time dilation aura ring
-      if (this.mods.dilationAura > 0) {
+      if (!skipAuras && this.mods.dilationAura > 0) {
         ctx.save();
         ctx.globalAlpha = 0.14;
         ctx.strokeStyle = '#60a5fa';
@@ -656,31 +663,36 @@ window.SG = window.SG || {};
       }
 
       // Acquired Combat Auras
-      this.renderAuras(ctx);
+      if (!skipAuras) {
+        this.renderAuras(ctx);
+      }
 
       // Lagrange orbital drones
       for (let i = 0; i < this.drones.length; i++) {
         const d = this.drones[i];
-        ctx.save();
-        ctx.translate(d.x, d.y);
-        ctx.rotate(d.angle * 2);
-        ctx.fillStyle = '#00f0ff';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(7, 0);
-        ctx.lineTo(-5, 5);
-        ctx.lineTo(-3, 0);
-        ctx.lineTo(-5, -5);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
+        if (useSprites) {
+          SG.Sprites.drawUnit(ctx, 'drone', d.x, d.y, d.angle * 2, 22);
+        } else {
+          ctx.save();
+          ctx.translate(d.x, d.y);
+          ctx.rotate(d.angle * 2);
+          ctx.fillStyle = '#00f0ff';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(7, 0);
+          ctx.lineTo(-5, 5);
+          ctx.lineTo(-3, 0);
+          ctx.lineTo(-5, -5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
       }
 
       // Main Player Quantum Ship
       ctx.save();
-      ctx.translate(this.x, this.y);
 
       // Shield bubble
       if (this.shield > 1) {
@@ -688,14 +700,30 @@ window.SG = window.SG || {};
         ctx.strokeStyle = `rgba(56, 189, 248, ${(0.22 + 0.38 * sRatio).toFixed(2)})`;
         ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2);
+        ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI * 2);
         ctx.stroke();
       }
 
-      ctx.rotate(this.aimAngle);
-      if (this.invulnTimer > 0 && Math.floor(this.invulnTimer * 24) % 2 === 0) {
-        ctx.globalAlpha = 0.45;
+      const shipAlpha = (this.invulnTimer > 0 && Math.floor(this.invulnTimer * 24) % 2 === 0) ? 0.45 : 1.0;
+
+      if (useSprites) {
+        // Subtle thruster flare behind Mindustry ship sprite
+        const spd = Math.hypot(this.vx, this.vy);
+        if (spd > 25) {
+          const glowCol = this.bulletTimeActive ? 'rgba(217, 138, 255, 0.45)' : 'rgba(0, 240, 255, 0.42)';
+          ctx.fillStyle = glowCol;
+          ctx.beginPath();
+          ctx.arc(this.x - Math.cos(this.aimAngle) * 16, this.y - Math.sin(this.aimAngle) * 16, 6 + Math.min(5, spd * 0.015), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        SG.Sprites.drawUnit(ctx, this.bulletTimeActive ? 'player_bt' : 'player', this.x, this.y, this.aimAngle, 46, 0, shipAlpha);
+        ctx.restore();
+        return;
       }
+
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.aimAngle);
+      ctx.globalAlpha = shipAlpha;
 
       ctx.fillStyle = '#0b1528';
       ctx.strokeStyle = '#00f0ff';
@@ -1534,7 +1562,16 @@ window.SG = window.SG || {};
     }
   }
 
-  function renderEnemy(ctx, e) {
+  const SPRITE_SIZES = {
+    swarmer: 34,
+    sniper: 42,
+    phalanx: 46,
+    pulsar: 42,
+    weaver: 38
+  };
+
+  function renderEnemy(ctx, e, useSprites = false) {
+    const spritesReady = !!(useSprites && SG.Sprites && SG.Sprites.ready);
     ctx.save();
 
     // Sniper predictive laser telegraph!
@@ -1554,24 +1591,28 @@ window.SG = window.SG || {};
     if (e.segments) {
       for (let s = e.segments.length - 1; s >= 0; s--) {
         const seg = e.segments[s];
-        ctx.save();
-        ctx.translate(seg.x, seg.y);
-        ctx.rotate(seg.angle);
-        ctx.fillStyle = '#1c0b1e';
-        ctx.strokeStyle = e.hitFlash > 0 ? '#ffffff' : '#ff2a5f';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, seg.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        // Spine fins
-        ctx.beginPath();
-        ctx.moveTo(4, -seg.radius);
-        ctx.lineTo(-8, -seg.radius - 7);
-        ctx.moveTo(4, seg.radius);
-        ctx.lineTo(-8, seg.radius + 7);
-        ctx.stroke();
-        ctx.restore();
+        if (spritesReady) {
+          SG.Sprites.drawUnit(ctx, 'boss_leviathan_seg', seg.x, seg.y, seg.angle, seg.radius * 2.35, e.hitFlash);
+        } else {
+          ctx.save();
+          ctx.translate(seg.x, seg.y);
+          ctx.rotate(seg.angle);
+          ctx.fillStyle = '#1c0b1e';
+          ctx.strokeStyle = e.hitFlash > 0 ? '#ffffff' : '#ff2a5f';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, seg.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Spine fins
+          ctx.beginPath();
+          ctx.moveTo(4, -seg.radius);
+          ctx.lineTo(-8, -seg.radius - 7);
+          ctx.moveTo(4, seg.radius);
+          ctx.lineTo(-8, seg.radius + 7);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
     }
 
@@ -1590,15 +1631,20 @@ window.SG = window.SG || {};
       ctx.lineTo(c2x, c2y);
       ctx.stroke();
 
-      [{ x: c1x, y: c1y, col: '#ffb838' }, { x: c2x, y: c2y, col: '#c06cff' }].forEach(c => {
-        ctx.fillStyle = '#140c24';
-        ctx.strokeStyle = e.hitFlash > 0 ? '#ffffff' : c.col;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, 24, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      });
+      if (spritesReady) {
+        SG.Sprites.drawUnit(ctx, 'boss_archon_gold', c1x, c1y, e.orbitAngle * 2, 58, e.hitFlash);
+        SG.Sprites.drawUnit(ctx, 'boss_archon_violet', c2x, c2y, -e.orbitAngle * 2, 58, e.hitFlash);
+      } else {
+        [{ x: c1x, y: c1y, col: '#ffb838' }, { x: c2x, y: c2y, col: '#c06cff' }].forEach(c => {
+          ctx.fillStyle = '#140c24';
+          ctx.strokeStyle = e.hitFlash > 0 ? '#ffffff' : c.col;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, 24, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+      }
       ctx.restore();
       return;
     }
@@ -1623,93 +1669,123 @@ window.SG = window.SG || {};
       ctx.restore();
     }
 
-    ctx.save();
-    ctx.rotate(e.angle);
-    if (e.isElite) {
-      ctx.scale(1.18, 1.18);
-    }
-
-    const strokeCol = e.hitFlash > 0 ? '#ffffff' : (e.stunTimer > 0 ? '#7df9ff' : (e.cryoTimer > 0 ? '#7dd3fc' : e.color));
-    ctx.fillStyle = '#0d1224';
-    ctx.strokeStyle = strokeCol;
-    ctx.lineWidth = 2.2;
-
-    if (e.type === 'swarmer') {
-      ctx.beginPath();
-      ctx.moveTo(14, 0);
-      ctx.lineTo(-10, 9);
-      ctx.lineTo(-5, 0);
-      ctx.lineTo(-10, -9);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else if (e.type === 'sniper') {
-      ctx.beginPath();
-      ctx.moveTo(19, 0);
-      ctx.lineTo(-11, 11);
-      ctx.lineTo(-15, 0);
-      ctx.lineTo(-11, -11);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else if (e.type === 'phalanx') {
-      // Hexagon hull
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = (i * Math.PI) / 3;
-        const px = Math.cos(a) * 16;
-        const py = Math.sin(a) * 16;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+    if (spritesReady) {
+      if (e.stunTimer > 0 || e.cryoTimer > 0) {
+        ctx.save();
+        ctx.strokeStyle = e.stunTimer > 0 ? 'rgba(125, 249, 255, 0.72)' : 'rgba(125, 211, 252, 0.65)';
+        ctx.lineWidth = 2.0;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.radius + 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Directional Frontal Energy Barrier (130 deg arc!)
-      ctx.strokeStyle = '#7df9ff';
-      ctx.lineWidth = 4.2;
-      ctx.beginPath();
-      ctx.arc(0, 0, 24, -1.12, 1.12);
-      ctx.stroke();
-    } else if (e.type === 'pulsar') {
-      ctx.beginPath();
-      for (let i = 0; i < 8; i++) {
-        const r = i % 2 === 0 ? 18 : 9;
-        const a = (i * Math.PI) / 4;
-        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      if (e.type === 'boss_leviathan') {
+        SG.Sprites.drawUnit(ctx, 'boss_leviathan_head', 0, 0, e.angle, 78, e.hitFlash);
+      } else {
+        const baseSz = SPRITE_SIZES[e.type] || 38;
+        const drawSz = baseSz * (e.isElite ? 1.2 : 1.0);
+        SG.Sprites.drawUnit(ctx, e.type, 0, 0, e.angle, drawSz, e.hitFlash);
+        if (e.type === 'phalanx') {
+          ctx.save();
+          ctx.rotate(e.angle);
+          if (e.isElite) ctx.scale(1.18, 1.18);
+          ctx.strokeStyle = '#7df9ff';
+          ctx.lineWidth = 4.0;
+          ctx.beginPath();
+          ctx.arc(0, 0, 24, -1.12, 1.12);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else if (e.type === 'weaver') {
-      ctx.beginPath();
-      ctx.moveTo(15, 0);
-      ctx.lineTo(0, 14);
-      ctx.lineTo(-15, 0);
-      ctx.lineTo(0, -14);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    } else if (e.type === 'boss_leviathan') {
-      ctx.beginPath();
-      ctx.moveTo(34, 0);
-      ctx.lineTo(-14, 24);
-      ctx.lineTo(-24, 0);
-      ctx.lineTo(-14, -24);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      // Mandibles
-      ctx.beginPath();
-      ctx.moveTo(18, -12);
-      ctx.lineTo(38, -18);
-      ctx.moveTo(18, 12);
-      ctx.lineTo(38, 18);
-      ctx.stroke();
+    } else {
+      ctx.save();
+      ctx.rotate(e.angle);
+      if (e.isElite) {
+        ctx.scale(1.18, 1.18);
+      }
+
+      const strokeCol = e.hitFlash > 0 ? '#ffffff' : (e.stunTimer > 0 ? '#7df9ff' : (e.cryoTimer > 0 ? '#7dd3fc' : e.color));
+      ctx.fillStyle = '#0d1224';
+      ctx.strokeStyle = strokeCol;
+      ctx.lineWidth = 2.2;
+
+      if (e.type === 'swarmer') {
+        ctx.beginPath();
+        ctx.moveTo(14, 0);
+        ctx.lineTo(-10, 9);
+        ctx.lineTo(-5, 0);
+        ctx.lineTo(-10, -9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (e.type === 'sniper') {
+        ctx.beginPath();
+        ctx.moveTo(19, 0);
+        ctx.lineTo(-11, 11);
+        ctx.lineTo(-15, 0);
+        ctx.lineTo(-11, -11);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (e.type === 'phalanx') {
+        // Hexagon hull
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i * Math.PI) / 3;
+          const px = Math.cos(a) * 16;
+          const py = Math.sin(a) * 16;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Directional Frontal Energy Barrier (130 deg arc!)
+        ctx.strokeStyle = '#7df9ff';
+        ctx.lineWidth = 4.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 24, -1.12, 1.12);
+        ctx.stroke();
+      } else if (e.type === 'pulsar') {
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const r = i % 2 === 0 ? 18 : 9;
+          const a = (i * Math.PI) / 4;
+          if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (e.type === 'weaver') {
+        ctx.beginPath();
+        ctx.moveTo(15, 0);
+        ctx.lineTo(0, 14);
+        ctx.lineTo(-15, 0);
+        ctx.lineTo(0, -14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (e.type === 'boss_leviathan') {
+        ctx.beginPath();
+        ctx.moveTo(34, 0);
+        ctx.lineTo(-14, 24);
+        ctx.lineTo(-24, 0);
+        ctx.lineTo(-14, -24);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Mandibles
+        ctx.beginPath();
+        ctx.moveTo(18, -12);
+        ctx.lineTo(38, -18);
+        ctx.moveTo(18, 12);
+        ctx.lineTo(38, 18);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.restore();
 
     // Mini HP bar for bruised tough enemies & Elites
     if (!e.isBoss && (e.hp < e.maxHp || e.isElite)) {

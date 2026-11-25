@@ -4,7 +4,9 @@ window.SG = window.SG || {};
 (function (SG) {
   'use strict';
 
-  SG.VERSION = 'v1.4.1';
+  SG.VERSION = 'v1.5.0';
+
+  const WORLD_SIZE = 3200;
 
   const DIFFICULTIES = {
     easy: { label: 'Кадет', enemyScale: 0.72, dmgScale: 0.75, xpMult: 1.25, scoreMult: 0.8 },
@@ -62,18 +64,32 @@ window.SG = window.SG || {};
       this.audio = new SG.SoundEngine();
       this.autopilot = new SG.TacticalAutopilot();
 
-      this.bounds = { width: window.innerWidth, height: window.innerHeight };
+      this.viewport = { width: window.innerWidth, height: window.innerHeight };
+      this.bounds = { width: WORLD_SIZE, height: WORLD_SIZE };
+      this.camera = {
+        x: Math.max(0, (WORLD_SIZE - this.viewport.width) * 0.5),
+        y: Math.max(0, (WORLD_SIZE - this.viewport.height) * 0.5)
+      };
       this.dpr = 1;
 
-      this.grid = new SG.SpacetimeGrid(this.bounds.width, this.bounds.height, 46);
+      if (SG.Sprites && typeof SG.Sprites.init === 'function') {
+        SG.Sprites.init();
+      }
+
+      this.grid = new SG.SpacetimeGrid(this.viewport.width, this.viewport.height, 46);
       this.particles = new SG.ParticleSystem(650);
 
       this.state = 'title'; // 'title' | 'playing' | 'upgrade' | 'paused' | 'gameover'
       this.stars = [];
+      this.landmarks = [];
 
       this.keys = {};
+      this.mouseScreen = {
+        x: this.viewport.width * 0.6,
+        y: this.viewport.height * 0.5
+      };
       this.mouse = {
-        x: this.bounds.width * 0.6,
+        x: this.bounds.width * 0.5 + 120,
         y: this.bounds.height * 0.5,
         leftDown: false
       };
@@ -216,6 +232,7 @@ window.SG = window.SG || {};
         difficulty: 'normal',
         quality: 'medium',
         gpuAccel: true,
+        useTextures: true,
         showFps: true,
         musicVol: 60,
         sfxVol: 85,
@@ -651,8 +668,10 @@ window.SG = window.SG || {};
       if (this.canvas) {
         const updateCanvasWell = (clientX, clientY) => {
           const rect = this.canvas.getBoundingClientRect();
-          this.touchInput.wellPreviewX = Math.max(28, Math.min(this.bounds.width - 28, clientX - rect.left));
-          this.touchInput.wellPreviewY = Math.max(28, Math.min(this.bounds.height - 28, clientY - rect.top));
+          const wx = (clientX - rect.left) + this.camera.x;
+          const wy = (clientY - rect.top) + this.camera.y;
+          this.touchInput.wellPreviewX = Math.max(28, Math.min(this.bounds.width - 28, wx));
+          this.touchInput.wellPreviewY = Math.max(28, Math.min(this.bounds.height - 28, wy));
         };
 
         this.canvas.addEventListener('pointerdown', (e) => {
@@ -739,6 +758,8 @@ window.SG = window.SG || {};
       this._aiUpgradeTimer = null;
       this.cancelUpgradeAnim();
       this.player = new SG.Player(this.bounds.width * 0.5, this.bounds.height * 0.5);
+      this.initLandmarks();
+      this.snapCameraToPlayer();
       this.wells = [];
       this.enemies = [];
       this.bullets = [];
@@ -841,6 +862,7 @@ window.SG = window.SG || {};
     syncSettingsUI() {
       const qSel = document.getElementById('set-quality');
       const gpuCb = document.getElementById('set-gpu');
+      const texCb = document.getElementById('set-textures');
       const fpsCb = document.getElementById('set-fps');
       const mSlider = document.getElementById('set-music-vol');
       const sSlider = document.getElementById('set-sfx-vol');
@@ -863,6 +885,7 @@ window.SG = window.SG || {};
         gpuCb.checked = !!this.settings.gpuAccel;
         gpuCb.disabled = !(this.gpu && this.gpu.supported);
       }
+      if (texCb) texCb.checked = !!this.settings.useTextures;
       if (fpsCb) fpsCb.checked = !!this.settings.showFps;
       if (mSlider) mSlider.value = String(this.settings.musicVol);
       if (mVal) mVal.textContent = `${this.settings.musicVol}%`;
@@ -882,28 +905,72 @@ window.SG = window.SG || {};
       this.updateQualityUI();
     }
 
+    screenToWorld(sx, sy) {
+      return {
+        x: sx + this.camera.x,
+        y: sy + this.camera.y
+      };
+    }
+
+    initLandmarks() {
+      this.landmarks = [];
+      const cols = 4;
+      const rows = 4;
+      const pad = 420;
+      const stepX = (this.bounds.width - pad * 2) / (cols - 1);
+      const stepY = (this.bounds.height - pad * 2) / (rows - 1);
+      const colNames = ['A', 'B', 'C', 'D'];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          this.landmarks.push({
+            x: pad + c * stepX,
+            y: pad + r * stepY,
+            radius: 74 + ((r + c) % 3) * 18,
+            kind: (r * cols + c) % 3,
+            label: `SEC-${colNames[c]}${r + 1}`
+          });
+        }
+      }
+    }
+
+    snapCameraToPlayer() {
+      if (!this.player) return;
+      const maxCX = Math.max(0, this.bounds.width - this.viewport.width);
+      const maxCY = Math.max(0, this.bounds.height - this.viewport.height);
+      this.camera.x = Math.max(0, Math.min(maxCX, this.player.x - this.viewport.width * 0.5));
+      this.camera.y = Math.max(0, Math.min(maxCY, this.player.y - this.viewport.height * 0.5));
+      if (this.grid) {
+        this.grid.setViewOrigin(this.camera.x, this.camera.y);
+      }
+    }
+
     handleResize() {
       const preset = this.getPreset();
-      this.bounds.width = window.innerWidth;
-      this.bounds.height = window.innerHeight;
+      this.viewport.width = window.innerWidth;
+      this.viewport.height = window.innerHeight;
       this.dpr = Math.min(preset.maxDpr, window.devicePixelRatio || 1);
-      this.canvas.width = Math.max(1, Math.floor(this.bounds.width * this.dpr));
-      this.canvas.height = Math.max(1, Math.floor(this.bounds.height * this.dpr));
-      this.canvas.style.width = `${this.bounds.width}px`;
-      this.canvas.style.height = `${this.bounds.height}px`;
+      this.canvas.width = Math.max(1, Math.floor(this.viewport.width * this.dpr));
+      this.canvas.height = Math.max(1, Math.floor(this.viewport.height * this.dpr));
+      this.canvas.style.width = `${this.viewport.width}px`;
+      this.canvas.style.height = `${this.viewport.height}px`;
       if (this.gpu) {
-        this.gpu.resize(this.bounds.width, this.bounds.height, this.dpr);
+        this.gpu.resize(this.viewport.width, this.viewport.height, this.dpr);
       }
-      this.grid.resize(this.bounds.width, this.bounds.height);
+      this.grid.resize(this.viewport.width, this.viewport.height);
       if (this.player) {
         const pad = this.player.radius + 8;
         this.player.x = Math.max(pad, Math.min(this.bounds.width - pad, this.player.x));
         this.player.y = Math.max(pad, Math.min(this.bounds.height - pad, this.player.y));
+        const maxCX = Math.max(0, this.bounds.width - this.viewport.width);
+        const maxCY = Math.max(0, this.bounds.height - this.viewport.height);
+        this.camera.x = Math.max(0, Math.min(maxCX, this.camera.x));
+        this.camera.y = Math.max(0, Math.min(maxCY, this.camera.y));
+        this.grid.setViewOrigin(this.camera.x, this.camera.y);
       }
 
       // Cache 2D fallback gradients on resize so render() allocates zero gradients per frame
-      const w = this.bounds.width;
-      const h = this.bounds.height;
+      const w = this.viewport.width;
+      const h = this.viewport.height;
       const rad = Math.max(w, h) * 0.78;
       this.bgGradNormal = this.ctx.createRadialGradient(w * 0.5, h * 0.5, 40, w * 0.5, h * 0.5, rad);
       this.bgGradNormal.addColorStop(0, '#070d1d');
@@ -998,15 +1065,21 @@ window.SG = window.SG || {};
 
       this.canvas.addEventListener('mousemove', (e) => {
         if (performance.now() - this._lastTouchTime < 700) return;
-        this.mouse.x = e.clientX;
-        this.mouse.y = e.clientY;
+        this.mouseScreen.x = e.clientX;
+        this.mouseScreen.y = e.clientY;
+        const wp = this.screenToWorld(e.clientX, e.clientY);
+        this.mouse.x = wp.x;
+        this.mouse.y = wp.y;
       });
 
       this.canvas.addEventListener('mousedown', (e) => {
         if (performance.now() - this._lastTouchTime < 700) return;
         this.audio.init();
-        this.mouse.x = e.clientX;
-        this.mouse.y = e.clientY;
+        this.mouseScreen.x = e.clientX;
+        this.mouseScreen.y = e.clientY;
+        const wp = this.screenToWorld(e.clientX, e.clientY);
+        this.mouse.x = wp.x;
+        this.mouse.y = wp.y;
         if (this.state !== 'playing') return;
 
         if (e.button === 0) {
@@ -1014,7 +1087,7 @@ window.SG = window.SG || {};
         } else if (e.button === 2 || e.button === 1) {
           e.preventDefault();
           const useRepulsor = e.button === 1 || e.shiftKey || this.repulsorMode;
-          this.spawnGravityWell(e.clientX, e.clientY, useRepulsor);
+          this.spawnGravityWell(wp.x, wp.y, useRepulsor);
         }
       });
 
@@ -1191,6 +1264,14 @@ window.SG = window.SG || {};
         gpuCb.addEventListener('change', () => {
           this.settings.gpuAccel = gpuCb.checked;
           this.applyQualitySettings();
+          this.saveSettings();
+        });
+      }
+
+      const texCb = document.getElementById('set-textures');
+      if (texCb) {
+        texCb.addEventListener('change', () => {
+          this.settings.useTextures = texCb.checked;
           this.saveSettings();
         });
       }
@@ -2026,8 +2107,8 @@ window.SG = window.SG || {};
         }
         this.audio.playBossAlarm();
         this.particles.addText(
-          this.bounds.width * 0.5,
-          this.bounds.height * 0.28,
+          this.player.x,
+          this.player.y - 120,
           `БОСС ВОЛНЫ ${waveNum}: ${SG.ENEMY_TYPES[bossType].name}!`,
           '#ff3b6b',
           1.45,
@@ -2077,15 +2158,22 @@ window.SG = window.SG || {};
       if (this.waveQueue.length === 0) return;
       const item = this.waveQueue.shift();
 
-      // Spawn along arena perimeter away from player
-      let x = 40, y = 40;
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const edge = Math.floor(Math.random() * 4);
-        if (edge === 0) { x = Math.random() * this.bounds.width; y = 28; }
-        else if (edge === 1) { x = this.bounds.width - 28; y = Math.random() * this.bounds.height; }
-        else if (edge === 2) { x = Math.random() * this.bounds.width; y = this.bounds.height - 28; }
-        else { x = 28; y = Math.random() * this.bounds.height; }
-        if (Math.hypot(x - this.player.x, y - this.player.y) > 240) break;
+      // Open-World Vampire-Survivors style offscreen ring spawn around the player
+      const halfDiag = Math.hypot(this.viewport.width, this.viewport.height) * 0.5;
+      const baseRing = Math.max(360, halfDiag + 55);
+      let x = this.player.x + baseRing;
+      let y = this.player.y;
+      const pad = 42;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const ang = Math.random() * Math.PI * 2;
+        const dist = baseRing + Math.random() * 140;
+        const cx = Math.max(pad, Math.min(this.bounds.width - pad, this.player.x + Math.cos(ang) * dist));
+        const cy = Math.max(pad, Math.min(this.bounds.height - pad, this.player.y + Math.sin(ang) * dist));
+        x = cx;
+        y = cy;
+        if (Math.hypot(x - this.player.x, y - this.player.y) > Math.max(280, Math.min(this.viewport.width, this.viewport.height) * 0.45)) {
+          break;
+        }
       }
 
       const enemy = SG.createEnemy(item.type, x, y, item.scale, {
@@ -2694,10 +2782,15 @@ window.SG = window.SG || {};
 
       // Ambient background warp on title screen
       if (this.state !== 'playing') {
+        if (this.state === 'title') {
+          this.camera.x = Math.max(0, (this.bounds.width - this.viewport.width) * 0.5);
+          this.camera.y = Math.max(0, (this.bounds.height - this.viewport.height) * 0.5);
+          this.grid.setViewOrigin(this.camera.x, this.camera.y);
+        }
         const t = performance.now() * 0.0015;
         this.grid.applyRadialForce(
-          this.bounds.width * 0.5 + Math.cos(t) * 180,
-          this.bounds.height * 0.5 + Math.sin(t * 1.3) * 110,
+          this.camera.x + this.viewport.width * 0.5 + Math.cos(t) * 180,
+          this.camera.y + this.viewport.height * 0.5 + Math.sin(t * 1.3) * 110,
           -240 * dt * 60 * 0.03,
           240,
           215
@@ -2712,6 +2805,11 @@ window.SG = window.SG || {};
         this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
         this.particles.update(dt * 0.25, this.wells);
         return;
+      }
+
+      if (!this.isTouchDevice && !this.autopilot.enabled) {
+        this.mouse.x = this.mouseScreen.x + this.camera.x;
+        this.mouse.y = this.mouseScreen.y + this.camera.y;
       }
 
       // Gather Player or Tactical-AI Input
@@ -2768,6 +2866,16 @@ window.SG = window.SG || {};
 
       // Player updates in personal proper-time (stays fast during Bullet-Time!)
       this.player.update(dt, input, this.bounds, this.particles);
+
+      // Smooth Open-World Camera follow & SpacetimeGrid scroll anchor
+      const maxCX = Math.max(0, this.bounds.width - this.viewport.width);
+      const maxCY = Math.max(0, this.bounds.height - this.viewport.height);
+      const targetCX = Math.max(0, Math.min(maxCX, this.player.x - this.viewport.width * 0.5));
+      const targetCY = Math.max(0, Math.min(maxCY, this.player.y - this.viewport.height * 0.5));
+      const camLerp = Math.min(1, dt * 10);
+      this.camera.x += (targetCX - this.camera.x) * camLerp;
+      this.camera.y += (targetCY - this.camera.y) * camLerp;
+      this.grid.setViewOrigin(this.camera.x, this.camera.y);
 
       // Chrono-Shift: Bullet-Time entry stun shockwave
       if (this.player.justEnteredBulletTime && this.player.mods.btNovaLevel > 0) {
@@ -2982,13 +3090,30 @@ window.SG = window.SG || {};
       // Update Player Combat Auras (Solar Corona, Cryo-Stasis, Entropy Siphon, Storm Coil, Grav-Repulse)
       this.updatePlayerAuras(dt, worldDt);
 
-      // Update Enemies + Matter Annihilation Collisions!
+      // Update Enemies + Open-World Straggler Re-Warp
+      const maxEnemyDist = Math.max(1450, Math.hypot(this.viewport.width, this.viewport.height) * 0.95);
       for (let i = this.enemies.length - 1; i >= 0; i--) {
         const e = this.enemies[i];
         if (e.dead) continue;
         SG.updateEnemy(e, worldDt, this);
         if (e.hp <= 0) {
           this.killEnemy(e);
+          continue;
+        }
+        const distP = Math.hypot(e.x - this.player.x, e.y - this.player.y);
+        const warpThresh = e.isBoss ? maxEnemyDist + 250 : maxEnemyDist;
+        if (distP > warpThresh) {
+          const ringR = Math.max(this.viewport.width, this.viewport.height) * 0.56 + 90;
+          const moveAng = Math.hypot(this.player.vx, this.player.vy) > 40
+            ? Math.atan2(this.player.vy, this.player.vx) + (Math.random() - 0.5) * 1.4
+            : Math.random() * Math.PI * 2;
+          e.x = Math.max(48, Math.min(this.bounds.width - 48, this.player.x + Math.cos(moveAng) * ringR));
+          e.y = Math.max(48, Math.min(this.bounds.height - 48, this.player.y + Math.sin(moveAng) * ringR));
+          e.vx *= 0.25;
+          e.vy *= 0.25;
+          if (e.isBoss) {
+            this.particles.addShockwave(e.x, e.y, 90, e.color, 0.35, 2.4);
+          }
         }
       }
 
@@ -3105,7 +3230,8 @@ window.SG = window.SG || {};
 
         if (!b.orbitWell) {
           b.life -= bDt;
-          if (b.life <= 0) {
+          const maxBulletDist = Math.max(this.viewport.width, this.viewport.height) * 1.2 + 220;
+          if (b.life <= 0 || Math.hypot(b.x - this.player.x, b.y - this.player.y) > maxBulletDist) {
             this.bullets.splice(i, 1);
             continue;
           }
@@ -4210,8 +4336,11 @@ window.SG = window.SG || {};
 
     render() {
       const ctx = this.ctx;
-      const w = this.bounds.width;
-      const h = this.bounds.height;
+      const w = this.viewport.width;
+      const h = this.viewport.height;
+      const camX = this.camera.x;
+      const camY = this.camera.y;
+      const useSprites = !!(this.settings.useTextures && SG.Sprites && SG.Sprites.ready);
       const preset = this.getPreset();
       const useGpu = !!(this.gpu && this.gpu.isActive());
       const nowSec = performance.now() * 0.001;
@@ -4232,6 +4361,10 @@ window.SG = window.SG || {};
           timeScale: this.timeScale,
           shakeX,
           shakeY,
+          camX,
+          camY,
+          skipEntityPolys: useSprites,
+          useTextures: useSprites,
           stars: this.stars,
           grid: this.grid,
           particles: this.particles,
@@ -4252,28 +4385,41 @@ window.SG = window.SG || {};
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
       if (useGpu) {
-        // Transparent 2D overlay: ONLY trajectory preview, floating texts, boss label, and crosshair!
         ctx.clearRect(0, 0, w, h);
-        if (shakeX !== 0 || shakeY !== 0) ctx.translate(shakeX, shakeY);
       } else {
-        // 2D Fallback Background, Stars & Spacetime Grid
-        if (this.settings.quality === 'low') {
+        // 2D Fallback Background (screen-aligned before world camera transform)
+        if (useSprites) {
+          ctx.fillStyle = this.timeScale < 0.65 ? '#070614' : '#080c15';
+        } else if (this.settings.quality === 'low') {
           ctx.fillStyle = this.timeScale < 0.65 ? '#070515' : '#040814';
         } else {
           ctx.fillStyle = (this.timeScale < 0.65 ? this.bgGradSlow : this.bgGradNormal) || '#040814';
         }
         ctx.fillRect(0, 0, w, h);
+      }
 
-        if (shakeX !== 0 || shakeY !== 0) ctx.translate(shakeX, shakeY);
+      // Enter World Space (camera-scrolled + screen shake)
+      ctx.translate(shakeX - camX, shakeY - camY);
 
-        const starTime = nowSec * 2;
-        ctx.fillStyle = '#d8ecff';
-        for (let i = 0; i < this.stars.length; i++) {
-          const s = this.stars[i];
-          ctx.globalAlpha = s.alpha * (0.7 + 0.3 * Math.sin(starTime + s.twinkle));
-          ctx.fillRect(s.nx * w, s.ny * h, s.size, s.size);
+      if (useGpu) {
+        if (useSprites && SG.Sprites) {
+          SG.Sprites.drawLandmarks(ctx, camX, camY, w, h, this.landmarks, this.timeScale < 0.65);
         }
-        ctx.globalAlpha = 1;
+      } else {
+        if (useSprites && SG.Sprites) {
+          SG.Sprites.drawFloor(ctx, camX, camY, w, h, this.bounds, this.landmarks, this.timeScale < 0.65);
+        } else {
+          const starTime = nowSec * 2;
+          ctx.fillStyle = '#d8ecff';
+          for (let i = 0; i < this.stars.length; i++) {
+            const s = this.stars[i];
+            const sx = (((s.nx * w - camX * 0.22) % w) + w) % w + camX;
+            const sy = (((s.ny * h - camY * 0.22) % h) + h) % h + camY;
+            ctx.globalAlpha = s.alpha * (0.7 + 0.3 * Math.sin(starTime + s.twinkle));
+            ctx.fillRect(sx, sy, s.size, s.size);
+          }
+          ctx.globalAlpha = 1;
+        }
 
         this.grid.render(ctx, this.timeScale, this.settings.quality);
 
@@ -4309,6 +4455,11 @@ window.SG = window.SG || {};
         for (let i = 0; i < this.wells.length; i++) {
           this.wells[i].render(ctx);
         }
+      }
+
+      // Open-World Arena Hazard Perimeter Barrier
+      if (SG.Sprites) {
+        SG.Sprites.drawPerimeter(ctx, this.bounds, camX, camY, w, h, nowSec);
       }
 
       // Real-time Relativistic Curved Aim Trajectory Preview (batched into 2 paths!)
@@ -4351,42 +4502,58 @@ window.SG = window.SG || {};
         ctx.restore();
       }
 
-      if (!useGpu) {
-        // Batched Pickups (XP Crystals in 1 draw call + Repair Orbs)
-        if (this.pickups.length > 0) {
-          ctx.fillStyle = '#00ffa6';
-          ctx.beginPath();
-          let hasHeal = false;
+      // Pickups (Mindustry Sprites or batched 2D fallback)
+      if (useSprites && SG.Sprites && this.pickups.length > 0) {
+        for (let i = 0; i < this.pickups.length; i++) {
+          const pk = this.pickups[i];
+          if (pk.x < camX - 40 || pk.x > camX + w + 40 || pk.y < camY - 40 || pk.y > camY + h + 40) continue;
+          const isXp = pk.kind === 'xp';
+          SG.Sprites.drawUnit(
+            ctx,
+            isXp ? 'pickup_xp' : 'pickup_heal',
+            pk.x,
+            pk.y,
+            nowSec * (isXp ? 1.5 : 0.9) + (pk.x + pk.y) * 0.01,
+            isXp ? 20 : 26,
+            0,
+            1
+          );
+        }
+      } else if (!useGpu && this.pickups.length > 0) {
+        ctx.fillStyle = '#00ffa6';
+        ctx.beginPath();
+        let hasHeal = false;
+        for (let i = 0; i < this.pickups.length; i++) {
+          const pk = this.pickups[i];
+          if (pk.kind === 'xp') {
+            ctx.moveTo(pk.x, pk.y - 5);
+            ctx.lineTo(pk.x + 4.5, pk.y);
+            ctx.lineTo(pk.x, pk.y + 5);
+            ctx.lineTo(pk.x - 4.5, pk.y);
+            ctx.closePath();
+          } else {
+            hasHeal = true;
+          }
+        }
+        ctx.fill();
+
+        if (hasHeal) {
+          ctx.fillStyle = '#22ffa6';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
           for (let i = 0; i < this.pickups.length; i++) {
             const pk = this.pickups[i];
-            if (pk.kind === 'xp') {
-              ctx.moveTo(pk.x, pk.y - 5);
-              ctx.lineTo(pk.x + 4.5, pk.y);
-              ctx.lineTo(pk.x, pk.y + 5);
-              ctx.lineTo(pk.x - 4.5, pk.y);
-              ctx.closePath();
-            } else {
-              hasHeal = true;
-            }
-          }
-          ctx.fill();
-
-          if (hasHeal) {
-            ctx.fillStyle = '#22ffa6';
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1.5;
-            for (let i = 0; i < this.pickups.length; i++) {
-              const pk = this.pickups[i];
-              if (pk.kind !== 'xp') {
-                ctx.beginPath();
-                ctx.arc(pk.x, pk.y, 7, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-              }
+            if (pk.kind !== 'xp') {
+              ctx.beginPath();
+              ctx.arc(pk.x, pk.y, 7, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
             }
           }
         }
+      }
 
+      if (!useGpu) {
         // Bullets & Relativistic Trails (zero shadowBlur!)
         if (this.bullets.length > 0) {
           ctx.save();
@@ -4395,6 +4562,7 @@ window.SG = window.SG || {};
           }
           for (let i = 0; i < this.bullets.length; i++) {
             const b = this.bullets[i];
+            if (b.x < camX - 80 || b.x > camX + w + 80 || b.y < camY - 80 || b.y > camY + h + 80) continue;
             if (preset.bulletTrails && b.trail.length > 1) {
               ctx.strokeStyle = b.color;
               ctx.globalAlpha = 0.45;
@@ -4426,16 +4594,24 @@ window.SG = window.SG || {};
           }
           ctx.restore();
         }
+      }
 
-        // Enemies
+      // Enemies (2D fallback or Mindustry sprite overlay)
+      if (!useGpu || useSprites) {
         for (let i = 0; i < this.enemies.length; i++) {
-          SG.renderEnemy(ctx, this.enemies[i]);
+          const e = this.enemies[i];
+          if (!e.isBoss && (e.x < camX - 140 || e.x > camX + w + 140 || e.y < camY - 140 || e.y > camY + h + 140)) {
+            continue;
+          }
+          SG.renderEnemy(ctx, e, useSprites);
         }
 
         // Player & AI Telemetry Overlay
         if (this.state === 'playing' || this.state === 'upgrade' || this.state === 'paused') {
-          this.autopilot.renderTelemetry(ctx, this.player);
-          this.player.render(ctx);
+          if (!useGpu) {
+            this.autopilot.renderTelemetry(ctx, this.player);
+          }
+          this.player.render(ctx, { useSprites, skipAuras: useGpu });
         }
       }
 
@@ -4495,28 +4671,6 @@ window.SG = window.SG || {};
         }
       }
 
-      // Boss Health Bar (top-center on touch so thumbs don't cover it; bottom-center on desktop)
-      const boss = this.enemies.find(e => e.isBoss && !e.dead);
-      if (boss) {
-        const bw = Math.min(480, w * (this.isTouchDevice ? 0.56 : 0.62));
-        const bx = (w - bw) * 0.5;
-        const by = this.isTouchDevice ? 78 : h - 42;
-        if (!useGpu) {
-          ctx.fillStyle = 'rgba(6, 10, 24, 0.82)';
-          ctx.strokeStyle = 'rgba(255, 59, 107, 0.6)';
-          ctx.lineWidth = 1.5;
-          ctx.fillRect(bx, by, bw, 12);
-          ctx.strokeRect(bx, by, bw, 12);
-          ctx.fillStyle = boss.color;
-          ctx.fillRect(bx + 2, by + 2, (bw - 4) * Math.max(0, boss.hp / boss.maxHp), 8);
-        }
-
-        ctx.fillStyle = '#ffd6e2';
-        ctx.font = '700 12px "JetBrains Mono", system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(`БОСС: ${boss.name} [ФАЗА ${boss.bossPhase || 1}/3] — ${Math.ceil(boss.hp)} / ${boss.maxHp}`, w * 0.5, by - 7);
-      }
-
       // Gravity Well Skillshot Preview (Touch Drag)
       if (this.state === 'playing' && this.touchInput && this.touchInput.wellPreviewActive && this.player) {
         const wx = this.touchInput.wellPreviewX;
@@ -4560,8 +4714,28 @@ window.SG = window.SG || {};
         ctx.restore();
       }
 
-      // Screen-Space Vignettes & Cinematic Wave Banner (unshaken HUD space)
+      // Screen-Space HUD Overlay, Vignettes, Boss Bar & Minimap (unshaken screen space)
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+      // Boss Health Bar (top-center on touch so thumbs don't cover it; bottom-center on desktop)
+      const boss = this.enemies.find(e => e.isBoss && !e.dead);
+      if (boss) {
+        const bw = Math.min(480, w * (this.isTouchDevice ? 0.56 : 0.62));
+        const bx = (w - bw) * 0.5;
+        const by = this.isTouchDevice ? 78 : h - 42;
+        ctx.fillStyle = 'rgba(6, 10, 24, 0.84)';
+        ctx.strokeStyle = 'rgba(255, 59, 107, 0.72)';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(bx, by, bw, 12);
+        ctx.strokeRect(bx, by, bw, 12);
+        ctx.fillStyle = boss.color || '#ff3b6b';
+        ctx.fillRect(bx + 2, by + 2, (bw - 4) * Math.max(0, boss.hp / boss.maxHp), 8);
+
+        ctx.fillStyle = '#ffd6e2';
+        ctx.font = '700 12px "JetBrains Mono", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`БОСС: ${boss.name} [ФАЗА ${boss.bossPhase || 1}/3] — ${Math.ceil(boss.hp)} / ${boss.maxHp}`, w * 0.5, by - 7);
+      }
 
       if (this.settings.quality !== 'low' && this.state === 'playing' && this.player) {
         const hpRatio = this.player.hp / Math.max(1, this.player.maxHp);
@@ -4612,10 +4786,15 @@ window.SG = window.SG || {};
         ctx.restore();
       }
 
+      // Tactical Open-World Minimap Radar
+      if (this.state === 'playing' || this.state === 'upgrade' || this.state === 'paused') {
+        this.renderMinimap(ctx, w, h);
+      }
+
       // Custom tactical crosshair in manual play (with recoil bloom, well pips & dual cooldown arcs)
       if (this.state === 'playing' && !this.autopilot.enabled) {
-        const mx = this.mouse.x;
-        const my = this.mouse.y;
+        const mx = this.mouse.x - camX;
+        const my = this.mouse.y - camY;
         const bloom = this.crosshairBloom || 0;
         const r = 10 + bloom * 0.45;
         ctx.strokeStyle = this.repulsorMode ? '#ffb838' : '#00f0ff';
@@ -4661,6 +4840,111 @@ window.SG = window.SG || {};
           ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
         }
       }
+
+      ctx.restore();
+    }
+
+    renderMinimap(ctx, vpW, vpH) {
+      if (!this.player || vpW < 360 || vpH < 260) return;
+      const size = this.isTouchDevice || vpW < 760 ? 94 : 124;
+      const mx = vpW - size - 14;
+      const my = this.isTouchDevice ? 112 : 76;
+      const scaleX = size / this.bounds.width;
+      const scaleY = size / this.bounds.height;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(7, 11, 19, 0.78)';
+      ctx.strokeStyle = 'rgba(255, 184, 56, 0.36)';
+      ctx.lineWidth = 1.2;
+      ctx.fillRect(mx, my, size, size);
+      ctx.strokeRect(mx, my, size, size);
+
+      // Sector sub-grid (4x4 quarters)
+      ctx.strokeStyle = 'rgba(130, 155, 190, 0.14)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let q = 1; q < 4; q++) {
+        const gx = mx + (size * q) / 4;
+        const gy = my + (size * q) / 4;
+        ctx.moveTo(gx, my);
+        ctx.lineTo(gx, my + size);
+        ctx.moveTo(mx, gy);
+        ctx.lineTo(mx + size, gy);
+      }
+      ctx.stroke();
+
+      // Industrial landmarks
+      if (this.landmarks) {
+        ctx.fillStyle = 'rgba(120, 145, 180, 0.35)';
+        for (let i = 0; i < this.landmarks.length; i++) {
+          const lm = this.landmarks[i];
+          ctx.fillRect(mx + lm.x * scaleX - 1.5, my + lm.y * scaleY - 1.5, 3, 3);
+        }
+      }
+
+      // Gravity wells
+      for (let i = 0; i < this.wells.length; i++) {
+        const w = this.wells[i];
+        ctx.fillStyle = w.isRepulsor ? '#ffb838' : '#c06cff';
+        ctx.fillRect(mx + w.x * scaleX - 1.5, my + w.y * scaleY - 1.5, 3, 3);
+      }
+
+      // Heal orbs (valuable across large world)
+      ctx.fillStyle = '#22ffa6';
+      for (let i = 0; i < this.pickups.length; i++) {
+        const pk = this.pickups[i];
+        if (pk.kind !== 'xp') {
+          ctx.fillRect(mx + pk.x * scaleX - 1.2, my + pk.y * scaleY - 1.2, 2.5, 2.5);
+        }
+      }
+
+      // Enemies (elites/bosses emphasized)
+      for (let i = 0; i < this.enemies.length; i++) {
+        const e = this.enemies[i];
+        if (e.dead) continue;
+        const ex = mx + e.x * scaleX;
+        const ey = my + e.y * scaleY;
+        if (e.isBoss) {
+          ctx.fillStyle = '#ffb838';
+          ctx.fillRect(ex - 3, ey - 3, 6, 6);
+          ctx.strokeStyle = '#ff3b6b';
+          ctx.strokeRect(ex - 4, ey - 4, 8, 8);
+        } else if (e.isElite) {
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(ex - 1.8, ey - 1.8, 3.6, 3.6);
+        } else {
+          ctx.fillStyle = 'rgba(255, 79, 109, 0.85)';
+          ctx.fillRect(ex - 1, ey - 1, 2, 2);
+        }
+      }
+
+      // Current viewport frame
+      const vx = mx + this.camera.x * scaleX;
+      const vy = my + this.camera.y * scaleY;
+      const vw = Math.min(size, vpW * scaleX);
+      const vh = Math.min(size, vpH * scaleY);
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(vx, vy, vw, vh);
+
+      // Player indicator
+      const px = mx + this.player.x * scaleX;
+      const py = my + this.player.y * scaleY;
+      ctx.fillStyle = '#00f0ff';
+      ctx.beginPath();
+      ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Radar coordinate label
+      const col = Math.min(4, Math.max(1, Math.floor((this.player.x / this.bounds.width) * 4) + 1));
+      const row = Math.min(4, Math.max(1, Math.floor((this.player.y / this.bounds.height) * 4) + 1));
+      ctx.fillStyle = 'rgba(180, 200, 224, 0.78)';
+      ctx.font = '700 9px "JetBrains Mono", system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`SEC ${col}:${row}`, mx + size - 3, my + size + 11);
 
       ctx.restore();
     }

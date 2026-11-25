@@ -17,9 +17,11 @@ window.SG = window.SG || {};
     precision mediump float;
     varying vec2 vUv;
     uniform vec2 uRes;
+    uniform vec2 uCam;
     uniform float uTime;
     uniform float uBulletTime;
     uniform float uNebula;
+    uniform float uDeck;
 
     void main() {
       vec2 p = vUv - 0.5;
@@ -32,11 +34,32 @@ window.SG = window.SG || {};
       vec3 col = mix(innerCol, outerCol, smoothstep(0.05, 0.85, dist));
 
       if (uNebula > 0.01) {
-        float w1 = sin(pa.x * 3.1 + uTime * 0.18) * cos(pa.y * 2.7 - uTime * 0.14);
-        float w2 = sin((pa.x + pa.y) * 4.4 - uTime * 0.11);
+        vec2 nebUv = pa + uCam * 0.00018;
+        float w1 = sin(nebUv.x * 3.1 + uTime * 0.18) * cos(nebUv.y * 2.7 - uTime * 0.14);
+        float w2 = sin((nebUv.x + nebUv.y) * 4.4 - uTime * 0.11);
         float neb = clamp((w1 * 0.5 + w2 * 0.5) * 0.5 + 0.5, 0.0, 1.0);
         vec3 nebTint = mix(vec3(0.0, 0.16, 0.24), vec3(0.18, 0.04, 0.28), smoothstep(-0.4, 0.5, pa.x));
         col += nebTint * pow(neb, 2.2) * 0.22 * uNebula * (1.0 - smoothstep(0.4, 1.05, dist));
+      }
+
+      if (uDeck > 0.5) {
+        vec2 screenPx = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
+        vec2 worldP = screenPx + uCam;
+        vec2 tile = mod(worldP, 64.0);
+        vec2 sec = mod(worldP, 256.0);
+        float plate = mod(floor(worldP.x / 64.0) + floor(worldP.y / 64.0), 2.0);
+        col += vec3(0.009, 0.014, 0.026) * plate;
+
+        // Subtle beveled industrial plate seam
+        float seam = step(tile.x, 1.5) + step(tile.y, 1.5);
+        col = mix(col, vec3(0.008, 0.012, 0.024), clamp(seam, 0.0, 1.0) * 0.65);
+
+        // Corner rivets & 256px sector boundary glow
+        float rivet = step(length(tile - vec2(8.0, 8.0)), 1.6) + step(length(tile - vec2(56.0, 56.0)), 1.6);
+        col += vec3(0.04, 0.07, 0.12) * clamp(rivet, 0.0, 1.0);
+
+        float secLine = step(sec.x, 1.5) + step(sec.y, 1.5);
+        col += vec3(0.0, 0.08, 0.12) * clamp(secLine, 0.0, 1.0) * 0.45;
       }
 
       gl_FragColor = vec4(col, 1.0);
@@ -230,9 +253,11 @@ window.SG = window.SG || {};
       this.nebLoc = {
         aPos: gl.getAttribLocation(this.nebulaProg, 'aPos'),
         uRes: gl.getUniformLocation(this.nebulaProg, 'uRes'),
+        uCam: gl.getUniformLocation(this.nebulaProg, 'uCam'),
         uTime: gl.getUniformLocation(this.nebulaProg, 'uTime'),
         uBulletTime: gl.getUniformLocation(this.nebulaProg, 'uBulletTime'),
-        uNebula: gl.getUniformLocation(this.nebulaProg, 'uNebula')
+        uNebula: gl.getUniformLocation(this.nebulaProg, 'uNebula'),
+        uDeck: gl.getUniformLocation(this.nebulaProg, 'uDeck')
       };
 
       this.geomLoc = {
@@ -450,9 +475,12 @@ window.SG = window.SG || {};
       const gl = this.gl;
       const {
         width, height, dpr, timeSec, timeScale, shakeX, shakeY,
+        camX = 0, camY = 0, skipEntityPolys = false, useTextures = true,
         stars, grid, particles, wells, bullets, enemies, pickups,
-        player, autopilot, state, quality, preset, isTouchDevice
+        player, autopilot, state, quality, preset
       } = frame;
+      const offX = shakeX - camX;
+      const offY = shakeY - camY;
 
       const bGrid = this.batches.lineGrid;
       const bTriAdd = this.batches.triAdd;
@@ -468,16 +496,18 @@ window.SG = window.SG || {};
       bLineAdd.len = 0;
       bPt.len = 0;
 
-      // 1. Background + Cosmic Nebula Shader Pass
+      // 1. Background + Cosmic Nebula + Scrolling Sector Deck Shader Pass
       gl.disable(gl.BLEND);
       gl.useProgram(this.nebulaProg);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.triBuf);
       gl.enableVertexAttribArray(this.nebLoc.aPos);
       gl.vertexAttribPointer(this.nebLoc.aPos, 2, gl.FLOAT, false, 0, 0);
       gl.uniform2f(this.nebLoc.uRes, width, height);
+      if (this.nebLoc.uCam) gl.uniform2f(this.nebLoc.uCam, camX, camY);
       gl.uniform1f(this.nebLoc.uTime, timeSec);
       gl.uniform1f(this.nebLoc.uBulletTime, timeScale < 0.7 ? 1.0 : 0.0);
       gl.uniform1f(this.nebLoc.uNebula, preset ? preset.nebula : 0.5);
+      if (this.nebLoc.uDeck) gl.uniform1f(this.nebLoc.uDeck, useTextures ? 1.0 : 0.0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.disableVertexAttribArray(this.nebLoc.aPos);
       gl.enable(gl.BLEND);
@@ -575,8 +605,8 @@ window.SG = window.SG || {};
         }
       }
 
-      // 5. Pack Pickups
-      if (pickups) {
+      // 5. Pack Pickups (skipped when 2D Mindustry sprites render them)
+      if (pickups && !skipEntityPolys) {
         for (let i = 0; i < pickups.length; i++) {
           const pk = pickups[i];
           if (pk.kind === 'xp') {
@@ -619,19 +649,12 @@ window.SG = window.SG || {};
         }
       }
 
-      // 7. Pack Enemies & Bosses
+      // 7. Pack Enemies & Bosses (when skipEntityPolys, only draw sniper laser sights)
       if (enemies) {
         const hullCol = [0.051, 0.071, 0.141, 0.96];
         const segFill = [0.11, 0.043, 0.118, 0.96];
         for (let i = 0; i < enemies.length; i++) {
           const e = enemies[i];
-          const baseRgb = this.parseHexRgb(e.color);
-          let sr = baseRgb[0], sg = baseRgb[1], sb = baseRgb[2];
-          if (e.hitFlash > 0) { sr = 1; sg = 1; sb = 1; }
-          else if (e.stunTimer > 0) { sr = 0.49; sg = 0.98; sb = 1; }
-          else if (e.cryoTimer > 0) { sr = 0.49; sg = 0.83; sb = 0.99; }
-          const strokeCol = [sr, sg, sb, 1.0];
-
           // Sniper telegraph laser sight
           if (e.type === 'sniper' && e.chargeTimer > 0) {
             const imminent = e.chargeTimer < 0.22;
@@ -643,6 +666,14 @@ window.SG = window.SG || {};
               this.pushLine(bLineAlpha, e.x, e.y, lx, ly, 1, 0.62, 0.17, 0.45);
             }
           }
+          if (skipEntityPolys) continue;
+
+          const baseRgb = this.parseHexRgb(e.color);
+          let sr = baseRgb[0], sg = baseRgb[1], sb = baseRgb[2];
+          if (e.hitFlash > 0) { sr = 1; sg = 1; sb = 1; }
+          else if (e.stunTimer > 0) { sr = 0.49; sg = 0.98; sb = 1; }
+          else if (e.cryoTimer > 0) { sr = 0.49; sg = 0.83; sb = 0.99; }
+          const strokeCol = [sr, sg, sb, 1.0];
 
           if (e.type === 'boss_archon') {
             const c1x = e.x + Math.cos(e.orbitAngle) * e.twinDist;
@@ -759,25 +790,25 @@ window.SG = window.SG || {};
           }
         }
 
-        // Temporal rewind 3s ghost
-        if (player.history.length > 15 && player.rewindCooldown <= 0) {
-          const ghost = player.history[0];
-          this.pushCircleOutline(bLineAlpha, ghost.x, ghost.y, 11, 16, 0, 0.94, 1, 0.26, 0, Math.PI * 2, true);
-        }
+        // Temporal rewind 3s ghost & Afterimages (when vector mode)
+        if (!skipEntityPolys) {
+          if (player.history.length > 15 && player.rewindCooldown <= 0) {
+            const ghost = player.history[0];
+            this.pushCircleOutline(bLineAlpha, ghost.x, ghost.y, 11, 16, 0, 0.94, 1, 0.26, 0, Math.PI * 2, true);
+          }
 
-        // Afterimages
-        for (let i = 0; i < player.afterimages.length; i++) {
-          const a = player.afterimages[i];
-          const col = this.parseHexRgb(a.color);
-          this.pushTransformedPoly(SHIP_POLY, a.x, a.y, Math.cos(a.angle), Math.sin(a.angle), null, [col[0], col[1], col[2], a.alpha], bTriAlpha, bLineAlpha);
-        }
+          for (let i = 0; i < player.afterimages.length; i++) {
+            const a = player.afterimages[i];
+            const col = this.parseHexRgb(a.color);
+            this.pushTransformedPoly(SHIP_POLY, a.x, a.y, Math.cos(a.angle), Math.sin(a.angle), null, [col[0], col[1], col[2], a.alpha], bTriAlpha, bLineAlpha);
+          }
 
-        // Paradox clones
-        for (let i = 0; i < player.clones.length; i++) {
-          const c = player.clones[i];
-          const ca = Math.min(0.8, c.life * 0.4);
-          this.pushRadialFan(bTriAlpha, c.x, c.y, 14, 16, 0, 1, 0.65, ca * 0.3, 0, 1, 0.65, ca * 0.3);
-          this.pushCircleOutline(bLineAlpha, c.x, c.y, 14, 16, 0, 1, 0.65, ca);
+          for (let i = 0; i < player.clones.length; i++) {
+            const c = player.clones[i];
+            const ca = Math.min(0.8, c.life * 0.4);
+            this.pushRadialFan(bTriAlpha, c.x, c.y, 14, 16, 0, 1, 0.65, ca * 0.3, 0, 1, 0.65, ca * 0.3);
+            this.pushCircleOutline(bLineAlpha, c.x, c.y, 14, 16, 0, 1, 0.65, ca);
+          }
         }
 
         // Auras
@@ -848,47 +879,34 @@ window.SG = window.SG || {};
           }
         }
 
-        // Lagrange drones
-        for (let i = 0; i < player.drones.length; i++) {
-          const d = player.drones[i];
-          this.pushTransformedPoly(DRONE_POLY, d.x, d.y, Math.cos(d.angle * 2), Math.sin(d.angle * 2), [0, 0.94, 1, 0.95], [1, 1, 1, 0.95], bTriAlpha, bLineAlpha);
-        }
+        if (!skipEntityPolys) {
+          // Lagrange drones
+          for (let i = 0; i < player.drones.length; i++) {
+            const d = player.drones[i];
+            this.pushTransformedPoly(DRONE_POLY, d.x, d.y, Math.cos(d.angle * 2), Math.sin(d.angle * 2), [0, 0.94, 1, 0.95], [1, 1, 1, 0.95], bTriAlpha, bLineAlpha);
+          }
 
-        // Player Shield + Ship Hull + Quantum Core
-        if (player.shield > 1) {
-          const sRatio = player.shield / player.maxShield;
-          this.pushCircleOutline(bLineAlpha, player.x, player.y, player.radius + 6, 24, 0.22, 0.74, 0.97, 0.22 + 0.38 * sRatio);
-        }
-        const shipAlpha = (player.invulnTimer > 0 && Math.floor(player.invulnTimer * 24) % 2 === 0) ? 0.45 : 1.0;
-        const pCos = Math.cos(player.aimAngle);
-        const pSin = Math.sin(player.aimAngle);
-        this.pushTransformedPoly(SHIP_POLY, player.x, player.y, pCos, pSin, [0.043, 0.082, 0.157, 0.96 * shipAlpha], [0, 0.94, 1, shipAlpha], bTriAlpha, bLineAlpha);
-        this.pushPoint(player.x + pCos, player.y + pSin, 8.5, player.bulletTimeActive ? 0.85 : 0.49, player.bulletTimeActive ? 0.54 : 0.98, 1.0, shipAlpha);
-      }
-
-      // 9. Pack Boss Health Bar (background + fill)
-      if (enemies) {
-        const boss = enemies.find(e => e.isBoss && !e.dead);
-        if (boss) {
-          const bw = Math.min(480, width * (isTouchDevice ? 0.56 : 0.62));
-          const bx = (width - bw) * 0.5;
-          const by = isTouchDevice ? 78 : height - 42;
-          const bRgb = this.parseHexRgb(boss.color);
-          this.pushRect(bTriAlpha, bx, by, bw, 12, 0.024, 0.039, 0.094, 0.82);
-          this.pushRect(bTriAlpha, bx + 2, by + 2, (bw - 4) * Math.max(0, boss.hp / boss.maxHp), 8, bRgb[0], bRgb[1], bRgb[2], 1.0);
-          this.pushLine(bLineAlpha, bx, by, bx + bw, by, 1, 0.23, 0.42, 0.6);
-          this.pushLine(bLineAlpha, bx + bw, by, bx + bw, by + 12, 1, 0.23, 0.42, 0.6);
-          this.pushLine(bLineAlpha, bx + bw, by + 12, bx, by + 12, 1, 0.23, 0.42, 0.6);
-          this.pushLine(bLineAlpha, bx, by + 12, bx, by, 1, 0.23, 0.42, 0.6);
+          // Player Shield + Ship Hull + Quantum Core
+          if (player.shield > 1) {
+            const sRatio = player.shield / player.maxShield;
+            this.pushCircleOutline(bLineAlpha, player.x, player.y, player.radius + 6, 24, 0.22, 0.74, 0.97, 0.22 + 0.38 * sRatio);
+          }
+          const shipAlpha = (player.invulnTimer > 0 && Math.floor(player.invulnTimer * 24) % 2 === 0) ? 0.45 : 1.0;
+          const pCos = Math.cos(player.aimAngle);
+          const pSin = Math.sin(player.aimAngle);
+          this.pushTransformedPoly(SHIP_POLY, player.x, player.y, pCos, pSin, [0.043, 0.082, 0.157, 0.96 * shipAlpha], [0, 0.94, 1, shipAlpha], bTriAlpha, bLineAlpha);
+          this.pushPoint(player.x + pCos, player.y + pSin, 8.5, player.bulletTimeActive ? 0.85 : 0.49, player.bulletTimeActive ? 0.54 : 0.98, 1.0, shipAlpha);
         }
       }
 
-      // 10. Pack Stars, Particles, Shockwaves & Lightnings
+      // 10. Pack Parallax Stars, Particles, Shockwaves & Lightnings
       if (stars) {
         for (let i = 0; i < stars.length; i++) {
           const s = stars[i];
           const a = s.alpha * (0.7 + 0.3 * Math.sin(timeSec * 2.0 + s.twinkle));
-          this.pushPoint(s.nx * width, s.ny * height, s.size * 2.8, 0.85, 0.93, 1.0, a);
+          const sx = ((s.nx * width - camX * 0.22) % width + width) % width;
+          const sy = ((s.ny * height - camY * 0.22) % height + height) % height;
+          this.pushPoint(sx + camX, sy + camY, s.size * 2.8, 0.85, 0.93, 1.0, a);
         }
       }
 
@@ -925,12 +943,12 @@ window.SG = window.SG || {};
         }
       }
 
-      // 11. Flush All Batches in Visual Depth Order (<= 6 GPU draw calls!)
-      this.flushGeom(bGrid, gl.LINES, false, width, height, shakeX, shakeY);
-      this.flushGeom(bTriAdd, gl.TRIANGLES, true, width, height, shakeX, shakeY);
-      this.flushGeom(bTriAlpha, gl.TRIANGLES, false, width, height, shakeX, shakeY);
-      this.flushGeom(bLineAlpha, gl.LINES, false, width, height, shakeX, shakeY);
-      this.flushGeom(bLineAdd, gl.LINES, true, width, height, shakeX, shakeY);
+      // 11. Flush All Batches in Visual Depth Order (world space offset by offX, offY)
+      this.flushGeom(bGrid, gl.LINES, false, width, height, offX, offY);
+      this.flushGeom(bTriAdd, gl.TRIANGLES, true, width, height, offX, offY);
+      this.flushGeom(bTriAlpha, gl.TRIANGLES, false, width, height, offX, offY);
+      this.flushGeom(bLineAlpha, gl.LINES, false, width, height, offX, offY);
+      this.flushGeom(bLineAdd, gl.LINES, true, width, height, offX, offY);
 
       if (bPt.len > 0) {
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
@@ -944,7 +962,7 @@ window.SG = window.SG || {};
         gl.vertexAttribPointer(this.ptLoc.aSize, 1, gl.FLOAT, false, 28, 8);
         gl.vertexAttribPointer(this.ptLoc.aColor, 4, gl.FLOAT, false, 28, 12);
         gl.uniform2f(this.ptLoc.uRes, width, height);
-        gl.uniform2f(this.ptLoc.uShake, shakeX, shakeY);
+        gl.uniform2f(this.ptLoc.uShake, offX, offY);
         gl.uniform1f(this.ptLoc.uDpr, dpr);
         gl.uniform1f(this.ptLoc.uMaxPt, this.maxPointSize);
         gl.drawArrays(gl.POINTS, 0, bPt.len / 7);
