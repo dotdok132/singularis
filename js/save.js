@@ -199,6 +199,21 @@ window.SG = window.SG || {};
       const resources = (worldIn.resources && typeof worldIn.resources === 'object' && !Array.isArray(worldIn.resources))
         ? { ...worldIn.resources }
         : {};
+      const worldSeed = Math.floor(toFinite(worldIn.worldSeed, 0));
+      const explored = Array.isArray(worldIn.explored)
+        ? worldIn.explored.filter(n => typeof n === 'number' && n >= 0 && n < 576)
+        : [];
+      const rawPois = Array.isArray(worldIn.pois) ? worldIn.pois : [];
+      const pois = [];
+      for (let i = 0; i < rawPois.length; i++) {
+        const p = rawPois[i];
+        if (!p || typeof p !== 'object') continue;
+        pois.push({
+          ...p,
+          x: clamp(toFinite(p.x, baseX) * scale, minCoord, maxCoord),
+          y: clamp(toFinite(p.y, baseY) * scale, minCoord, maxCoord)
+        });
+      }
 
       const difficulty = (typeof raw.difficulty === 'string' && ['easy', 'normal', 'hard'].includes(raw.difficulty))
         ? raw.difficulty
@@ -243,7 +258,10 @@ window.SG = window.SG || {};
           base: { x: baseX, y: baseY },
           anomalies,
           buildings,
-          resources
+          resources,
+          worldSeed,
+          explored,
+          pois
         }
       };
     },

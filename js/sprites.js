@@ -1481,6 +1481,102 @@ window.SG = window.SG || {};
       ctx.restore();
     },
 
+    drawPOI(ctx, poi, nowSec, isNear) {
+      if (!poi || poi.collected) return;
+      ctx.save();
+      const { x, y, type, radius, progress } = poi;
+      const col = type === 'matter_vein' ? '#ffd166' : (type === 'supply_cache' ? '#00f0ff' : '#c06cff');
+      const pulse = 0.5 + 0.5 * Math.sin(nowSec * 3.5 + x * 0.01);
+
+      ctx.translate(x, y);
+
+      // Soft outer scan ring
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = isNear ? 0.65 : 0.28;
+      ctx.lineWidth = isNear ? 2.2 : 1.4;
+      ctx.setLineDash([7, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Scan progress arc
+      if (progress > 0.01) {
+        ctx.globalAlpha = 0.95;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius + 6, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 2 * Math.min(1, progress));
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 1;
+      if (type === 'matter_vein') {
+        // Golden crystal cluster
+        for (let k = 0; k < 5; k++) {
+          ctx.save();
+          ctx.rotate((k * Math.PI * 2) / 5 + nowSec * 0.25);
+          ctx.beginPath();
+          ctx.moveTo(0, -24 - (k % 2) * 5);
+          ctx.lineTo(9, -6);
+          ctx.lineTo(0, 6);
+          ctx.lineTo(-9, -6);
+          ctx.closePath();
+          ctx.fillStyle = k % 2 === 0 ? '#ffd166' : '#ffb838';
+          ctx.fill();
+          ctx.strokeStyle = '#3d2600';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else if (type === 'supply_cache') {
+        // Armored supply pod
+        ctx.save();
+        ctx.rotate(Math.sin(nowSec * 1.2) * 0.15);
+        ctx.fillStyle = '#152236';
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 2.4;
+        ctx.fillRect(-18, -14, 36, 28);
+        ctx.strokeRect(-18, -14, 36, 28);
+        ctx.fillStyle = '#ffd166';
+        ctx.fillRect(-12, -4, 24, 8);
+        ctx.restore();
+      } else {
+        // Precursor Relic Obelisk
+        ctx.save();
+        ctx.rotate(nowSec * 0.8);
+        ctx.beginPath();
+        for (let k = 0; k < 4; k++) {
+          const a = (k * Math.PI) / 2;
+          const r = 24;
+          if (k === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+          else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#1e1338';
+        ctx.fill();
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = '#c06cff';
+        ctx.stroke();
+        ctx.fillStyle = '#e8b8ff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 6 + pulse * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      if (isNear || progress > 0.01) {
+        ctx.textAlign = 'center';
+        ctx.font = '800 10px "JetBrains Mono", monospace';
+        ctx.fillStyle = col;
+        const label = progress > 0.01
+          ? tr('poi.scan', { pct: Math.round(progress * 100) }, `SCAN ${Math.round(progress * 100)}%`)
+          : tr(`poi.${type}`, null, type);
+        ctx.fillText(label, 0, -radius - 12);
+      }
+
+      ctx.restore();
+    },
+
     drawAnomaly(ctx, anomaly, nowSec, isNear) {
       if (!anomaly) return;
       ctx.save();

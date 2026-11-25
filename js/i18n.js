@@ -450,7 +450,19 @@ window.SG = window.SG || {};
       'game.raidIncoming': 'ВНИМАНИЕ: РЕЙД НА БАЗУ!',
       'game.raidIncomingSub': 'ВРАЖЕСКИЙ ОТРЯД ({n}) ИДЁТ К КОМАНДНОМУ ЯДРУ',
       'game.raidCleared': 'РЕЙД ОТБИТ!',
-      'game.raidClearedSub': 'НАГРАДА ЗА ОБОРОНУ: +{matter} ⚡ • +{xp} XP'
+      'game.raidClearedSub': 'НАГРАДА ЗА ОБОРОНУ: +{matter} ⚡ • +{xp} XP',
+      'biome.core': 'Командный сектор',
+      'biome.nebula': 'Туманность Эфира',
+      'biome.pulsar': 'Пульсарный пояс',
+      'biome.void': 'Внешняя Пустота',
+      'poi.matter_vein': 'Кристаллическая жила',
+      'poi.supply_cache': 'Заброшенный тайник',
+      'poi.xp_relic': 'Реликвия Предтеч',
+      'poi.scan': 'СКАНИРОВАНИЕ {pct}%',
+      'poi.harvested': '+{matter} ⚡ • +{xp} XP',
+      'poi.cacheReroll': '+{matter} ⚡ • +{xp} XP • +1 ПЕРЕБРОС!',
+      'poi.relicLoot': '+{xp} XP • СЕКТОР РАЗВЕДАН!',
+      'wm.explored': 'Исследовано: {pct}% ({n}/{total}) • {biome}'
     },
 
     uk: {
@@ -832,7 +844,19 @@ window.SG = window.SG || {};
       'game.raidIncoming': 'УВАГА: РЕЙД НА БАЗУ!',
       'game.raidIncomingSub': 'ВОРОЖИЙ ЗАГІН ({n}) ЙДЕ ДО КОМАНДНОГО ЯДРА',
       'game.raidCleared': 'РЕЙД ВІДБИТО!',
-      'game.raidClearedSub': 'НАГОРОДА ЗА ОБОРОНУ: +{matter} ⚡ • +{xp} XP'
+      'game.raidClearedSub': 'НАГОРОДА ЗА ОБОРОНУ: +{matter} ⚡ • +{xp} XP',
+      'biome.core': 'Командний сектор',
+      'biome.nebula': 'Туманність Ефіру',
+      'biome.pulsar': 'Пульсарний пояс',
+      'biome.void': 'Зовнішня Порожнеча',
+      'poi.matter_vein': 'Кристалічна жила',
+      'poi.supply_cache': 'Закинутий сховок',
+      'poi.xp_relic': 'Реліквія Предтеч',
+      'poi.scan': 'СКАНУВАННЯ {pct}%',
+      'poi.harvested': '+{matter} ⚡ • +{xp} XP',
+      'poi.cacheReroll': '+{matter} ⚡ • +{xp} XP • +1 ПЕРЕКИД!',
+      'poi.relicLoot': '+{xp} XP • СЕКТОР РОЗВІДАНО!',
+      'wm.explored': 'Досліджено: {pct}% ({n}/{total}) • {biome}'
     },
 
     en: {
@@ -1214,7 +1238,19 @@ window.SG = window.SG || {};
       'game.raidIncoming': 'WARNING: BASE RAID INCOMING!',
       'game.raidIncomingSub': 'HOSTILE SQUAD ({n}) MARCHING ON COMMAND CORE',
       'game.raidCleared': 'RAID REPELLED!',
-      'game.raidClearedSub': 'DEFENSE BONUS: +{matter} ⚡ • +{xp} XP'
+      'game.raidClearedSub': 'DEFENSE BONUS: +{matter} ⚡ • +{xp} XP',
+      'biome.core': 'Command Sector',
+      'biome.nebula': 'Ether Nebula',
+      'biome.pulsar': 'Pulsar Belt',
+      'biome.void': 'Outer Void',
+      'poi.matter_vein': 'Crystal Vein',
+      'poi.supply_cache': 'Supply Cache',
+      'poi.xp_relic': 'Precursor Relic',
+      'poi.scan': 'SCANNING {pct}%',
+      'poi.harvested': '+{matter} ⚡ • +{xp} XP',
+      'poi.cacheReroll': '+{matter} ⚡ • +{xp} XP • +1 REROLL!',
+      'poi.relicLoot': '+{xp} XP • RADAR REVEAL!',
+      'wm.explored': 'Explored: {pct}% ({n}/{total}) • {biome}'
     },
 
     es: {
@@ -1596,7 +1632,19 @@ window.SG = window.SG || {};
       'game.raidIncoming': '¡ALERTA: INCURSIÓN A LA BASE!',
       'game.raidIncomingSub': 'ESCUADRÓN HOSTIL ({n}) AVANZANDO HACIA EL NÚCLEO',
       'game.raidCleared': '¡INCURSIÓN REPELIDA!',
-      'game.raidClearedSub': 'BONO DE DEFENSA: +{matter} ⚡ • +{xp} XP'
+      'game.raidClearedSub': 'BONO DE DEFENSA: +{matter} ⚡ • +{xp} XP',
+      'biome.core': 'Sector de Mando',
+      'biome.nebula': 'Nebulosa de Éter',
+      'biome.pulsar': 'Cinturón Púlsar',
+      'biome.void': 'Vacío Exterior',
+      'poi.matter_vein': 'Veta de Cristal',
+      'poi.supply_cache': 'Alijo de Suministros',
+      'poi.xp_relic': 'Reliquia Precursora',
+      'poi.scan': 'ESCANEANDO {pct}%',
+      'poi.harvested': '+{matter} ⚡ • +{xp} XP',
+      'poi.cacheReroll': '+{matter} ⚡ • +{xp} XP • +1 REINTENTO!',
+      'poi.relicLoot': '+{xp} XP • ¡RADAR REVELADO!',
+      'wm.explored': 'Explorado: {pct}% ({n}/{total}) • {biome}'
     }
   };
 

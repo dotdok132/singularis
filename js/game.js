@@ -1009,7 +1009,74 @@ window.SG = window.SG || {};
     updateOverworldCombat(dt) {
       if (!this.player || !this.base || this.gameMode !== 'openworld') return;
 
-      // 1. Roaming Overworld Patrols (keeps sector alive while flying between rifts)
+      // 0. Fog of War Reveal & Procedural POI Scanning/Harvesting
+      this.revealFogAt(this.player.x, this.player.y, 1350, true);
+      if (this.pois && this.pois.length > 0) {
+        for (let i = 0; i < this.pois.length; i++) {
+          const poi = this.pois[i];
+          if (poi.collected) {
+            poi.respawnTimer = (poi.respawnTimer || 0) - dt;
+            if (poi.respawnTimer <= 0) {
+              const pad = 700;
+              const span = WORLD_SIZE - pad * 2;
+              poi.x = Math.round(pad + Math.random() * span);
+              poi.y = Math.round(pad + Math.random() * span);
+              poi.collected = false;
+              poi.progress = 0;
+            }
+            continue;
+          }
+          const d = Math.hypot(this.player.x - poi.x, this.player.y - poi.y);
+          if (d <= poi.radius + 22) {
+            poi.progress = Math.min(1, (poi.progress || 0) + dt / 0.85);
+            if (poi.progress >= 1) {
+              poi.collected = true;
+              poi.progress = 0;
+              poi.respawnTimer = 95 + Math.random() * 45;
+              if (!this.resources) this.resources = { matter: 0 };
+              if (poi.type === 'matter_vein') {
+                const m = 18 + Math.floor(Math.random() * 17);
+                const x = 45 + this.level * 6;
+                this.resources.matter += m;
+                this.particles.addShockwave(poi.x, poi.y, 130, '#ffd166', 0.45, 3);
+                this.particles.burst(poi.x, poi.y, 22, '#ffd166', 70, 220, 0.5, true);
+                this.particles.addText(poi.x, poi.y - 26, this.t('poi.harvested', { matter: m, xp: x }), '#ffd166', 1.15, 1.5);
+                this.gainXP(x);
+              } else if (poi.type === 'supply_cache') {
+                const m = 24 + Math.floor(Math.random() * 19);
+                const x = 75 + this.level * 8;
+                this.resources.matter += m;
+                const gotReroll = Math.random() < 0.35;
+                if (gotReroll) this.rerolls = (this.rerolls || 0) + 1;
+                this.particles.addShockwave(poi.x, poi.y, 140, '#00f0ff', 0.45, 3);
+                this.particles.burst(poi.x, poi.y, 24, '#00f0ff', 70, 230, 0.5, true);
+                this.particles.addText(
+                  poi.x,
+                  poi.y - 26,
+                  gotReroll ? this.t('poi.cacheReroll', { matter: m, xp: x }) : this.t('poi.harvested', { matter: m, xp: x }),
+                  '#00f0ff',
+                  1.15,
+                  1.6
+                );
+                this.gainXP(x);
+              } else {
+                const x = 140 + this.level * 18;
+                this.revealFogAt(poi.x, poi.y, 3400, false);
+                this.particles.addShockwave(poi.x, poi.y, 170, '#c06cff', 0.5, 3.2);
+                this.particles.burst(poi.x, poi.y, 28, '#c06cff', 80, 260, 0.55, true);
+                this.particles.addText(poi.x, poi.y - 28, this.t('poi.relicLoot', { xp: x }), '#d8a6ff', 1.18, 1.7);
+                this.gainXP(x);
+              }
+              this.audio.playLevelUp();
+              this.updateHUD();
+            }
+          } else {
+            poi.progress = Math.max(0, (poi.progress || 0) - dt * 1.6);
+          }
+        }
+      }
+
+      // 1. Roaming Overworld Patrols (biome-aware, keeps sector alive while flying)
       const maxPatrols = Math.min(10, 4 + Math.floor(this.level / 3));
       const activePatrols = this.enemies.filter(e => !e.dead && !e.isRaider).length;
       this._owPatrolTimer = (this._owPatrolTimer || 0) - dt;
@@ -1020,13 +1087,18 @@ window.SG = window.SG || {};
         const sx = Math.max(180, Math.min(WORLD_SIZE - 180, this.player.x + Math.cos(ang) * dist));
         const sy = Math.max(180, Math.min(WORLD_SIZE - 180, this.player.y + Math.sin(ang) * dist));
         if (Math.hypot(sx - this.base.x, sy - this.base.y) > this.base.repairRadius + 320) {
-          const pool = this.level >= 6 ? ['swarmer', 'shooter', 'pulsar', 'splitter'] : ['swarmer', 'shooter', 'shield'];
+          const biome = this.getBiomeAt(sx, sy);
+          const pool = biome === 'void'
+            ? ['pulsar', 'splitter', 'shield', 'shooter']
+            : (biome === 'pulsar' || this.level >= 6 ? ['swarmer', 'shooter', 'pulsar', 'splitter'] : ['swarmer', 'shooter', 'shield']);
           const kind = pool[Math.floor(Math.random() * pool.length)];
           const diffCfg = DIFFICULTIES[this.settings.difficulty] || DIFFICULTIES.normal;
-          const scale = (0.78 + this.level * 0.08) * diffCfg.enemyScale;
+          const biomeMult = biome === 'void' ? 1.28 : (biome === 'pulsar' ? 1.12 : 1.0);
+          const scale = (0.78 + this.level * 0.08) * biomeMult * diffCfg.enemyScale;
+          const eliteChance = biome === 'void' ? 0.28 : 0.14;
           const enemy = SG.createEnemy(kind, sx, sy, scale, {
             waveNum: Math.max(1, this.level),
-            isElite: this.level >= 5 && Math.random() < 0.16
+            isElite: this.level >= 4 && Math.random() < eliteChance
           });
           this.enemies.push(enemy);
         }
@@ -1517,6 +1589,109 @@ window.SG = window.SG || {};
         const pos = this._findRandomAnomalyPos({ existingPoints: this.anomalies });
         this.anomalies.push(this._makeAnomaly(tiers[i], pos.x, pos.y));
       }
+
+      this.worldSeed = Math.floor(Math.random() * 1e9);
+      this.explored = new Set();
+      this.pois = [];
+      this.generateProceduralPOIs();
+      this.revealFogAt(this.base.x, this.base.y, 2600, false);
+    }
+
+    getSectorIndex(wx, wy) {
+      const gx = Math.max(0, Math.min(23, Math.floor((wx / WORLD_SIZE) * 24)));
+      const gy = Math.max(0, Math.min(23, Math.floor((wy / WORLD_SIZE) * 24)));
+      return gy * 24 + gx;
+    }
+
+    isPosExplored(wx, wy) {
+      if (!this.explored || this.explored.size === 0) return true;
+      return this.explored.has(this.getSectorIndex(wx, wy));
+    }
+
+    getBiomeAt(wx, wy) {
+      if (!this.base) return 'core';
+      const dx = wx - this.base.x;
+      const dy = wy - this.base.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 3200) return 'core';
+      if (dist >= 7800) return 'void';
+      const ang = Math.atan2(dy, dx);
+      const seedPhase = ((this.worldSeed || 1337) % 628) / 100;
+      const wave = Math.sin(ang * 3 + seedPhase) + Math.cos(dist * 0.0007 + seedPhase);
+      return wave >= 0 ? 'nebula' : 'pulsar';
+    }
+
+    revealFogAt(wx, wy, radius = 1350, awardXp = true) {
+      if (!this.explored) this.explored = new Set();
+      const cell = WORLD_SIZE / 24;
+      const minGx = Math.max(0, Math.floor((wx - radius) / cell));
+      const maxGx = Math.min(23, Math.floor((wx + radius) / cell));
+      const minGy = Math.max(0, Math.floor((wy - radius) / cell));
+      const maxGy = Math.min(23, Math.floor((wy + radius) / cell));
+      let newlyDiscovered = 0;
+
+      for (let gy = minGy; gy <= maxGy; gy++) {
+        for (let gx = minGx; gx <= maxGx; gx++) {
+          const cx = (gx + 0.5) * cell;
+          const cy = (gy + 0.5) * cell;
+          if (Math.hypot(cx - wx, cy - wy) <= radius + cell * 0.45) {
+            const idx = gy * 24 + gx;
+            if (!this.explored.has(idx)) {
+              this.explored.add(idx);
+              newlyDiscovered++;
+            }
+          }
+        }
+      }
+
+      if (awardXp && newlyDiscovered > 0 && this.state === 'playing') {
+        this.gainXP(newlyDiscovered * 12);
+      }
+      return newlyDiscovered;
+    }
+
+    generateProceduralPOIs() {
+      this.pois = [];
+      const types = [
+        ...Array(16).fill('matter_vein'),
+        ...Array(14).fill('supply_cache'),
+        ...Array(12).fill('xp_relic')
+      ];
+      const pad = 700;
+      const span = WORLD_SIZE - pad * 2;
+
+      for (let i = 0; i < types.length; i++) {
+        const type = types[i];
+        let bestX = pad + Math.random() * span;
+        let bestY = pad + Math.random() * span;
+        for (let attempt = 0; attempt < 24; attempt++) {
+          const cx = pad + Math.random() * span;
+          const cy = pad + Math.random() * span;
+          if (this.base && Math.hypot(cx - this.base.x, cy - this.base.y) < 950) continue;
+          let tooClose = false;
+          for (let j = 0; j < this.pois.length; j++) {
+            if (Math.hypot(cx - this.pois[j].x, cy - this.pois[j].y) < 880) {
+              tooClose = true;
+              break;
+            }
+          }
+          if (!tooClose) {
+            bestX = cx;
+            bestY = cy;
+            break;
+          }
+        }
+        this.pois.push({
+          id: 'poi_' + Math.random().toString(36).slice(2, 9),
+          type,
+          x: Math.round(bestX),
+          y: Math.round(bestY),
+          radius: 42,
+          progress: 0,
+          collected: false,
+          respawnTimer: 0
+        });
+      }
     }
 
     spawnNewAnomaly(tier = 1, avoidPoints = []) {
@@ -1927,7 +2102,10 @@ window.SG = window.SG || {};
             respawnTimer: a.cleared ? Math.max(0, Math.round((a.respawnTimer || 0) * 10) / 10) : 0
           })),
           buildings: Array.isArray(this.buildings) ? this.buildings : [],
-          resources: (this.resources && typeof this.resources === 'object') ? this.resources : {}
+          resources: (this.resources && typeof this.resources === 'object') ? this.resources : {},
+          worldSeed: this.worldSeed || 0,
+          explored: this.explored ? Array.from(this.explored) : [],
+          pois: Array.isArray(this.pois) ? this.pois : []
         }
       };
     }
@@ -2059,6 +2237,23 @@ window.SG = window.SG || {};
       } else {
         this.initOverworldEntities();
       }
+
+      this.worldSeed = saved.world.worldSeed || Math.floor(Math.random() * 1e9);
+      this.explored = new Set(Array.isArray(saved.world.explored) ? saved.world.explored : []);
+      this.pois = Array.isArray(saved.world.pois) && saved.world.pois.length > 0
+        ? saved.world.pois.map(p => ({
+          id: p.id || ('poi_' + Math.random().toString(36).slice(2, 9)),
+          type: p.type || 'matter_vein',
+          x: p.x,
+          y: p.y,
+          radius: p.radius || 42,
+          progress: 0,
+          collected: !!p.collected,
+          respawnTimer: p.respawnTimer || 0
+        }))
+        : [];
+      if (this.pois.length === 0) this.generateProceduralPOIs();
+      if (this.explored.size === 0) this.revealFogAt(this.base.x, this.base.y, 2600, false);
 
       this.player = new SG.Player(saved.player.overworldX, saved.player.overworldY);
       this.overworldPos = { x: this.player.x, y: this.player.y };
@@ -3500,6 +3695,36 @@ window.SG = window.SG || {};
       ctx.fillStyle = '#040812';
       ctx.fillRect(0, 0, s, s);
 
+      // Procedural Biome shading + Fog of War (24x24 sectors)
+      const fogDivs = 24;
+      const cellPx = s / fogDivs;
+      const cellWorld = WORLD_SIZE / fogDivs;
+      for (let gy = 0; gy < fogDivs; gy++) {
+        for (let gx = 0; gx < fogDivs; gx++) {
+          const idx = gy * fogDivs + gx;
+          const explored = !this.explored || this.explored.size === 0 || this.explored.has(idx);
+          if (explored) {
+            const biome = this.getBiomeAt((gx + 0.5) * cellWorld, (gy + 0.5) * cellWorld);
+            if (biome === 'nebula') ctx.fillStyle = 'rgba(255, 209, 102, 0.045)';
+            else if (biome === 'pulsar') ctx.fillStyle = 'rgba(192, 108, 255, 0.05)';
+            else if (biome === 'void') ctx.fillStyle = 'rgba(255, 59, 107, 0.045)';
+            else ctx.fillStyle = 'rgba(0, 240, 255, 0.045)';
+            ctx.fillRect(gx * cellPx, gy * cellPx, cellPx + 0.5, cellPx + 0.5);
+          } else {
+            ctx.fillStyle = 'rgba(2, 5, 11, 0.86)';
+            ctx.fillRect(gx * cellPx, gy * cellPx, cellPx + 0.5, cellPx + 0.5);
+          }
+        }
+      }
+
+      const wmInfoEl = document.getElementById('worldmap-info');
+      if (wmInfoEl && this.explored && !this._worldMapHover) {
+        const totalSec = 576;
+        const pct = Math.round((this.explored.size / totalSec) * 100);
+        const curBiome = this.player ? this.getBiomeAt(this.player.x, this.player.y) : 'core';
+        wmInfoEl.textContent = this.t('wm.explored', { pct, n: this.explored.size, total: totalSec, biome: this.t(`biome.${curBiome}`) });
+      }
+
       // 12x12 sector grid + A..L / 1..12 edge labels
       const divs = 12;
       const colNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
@@ -3572,12 +3797,25 @@ window.SG = window.SG || {};
       ctx.textBaseline = 'top';
       ctx.fillText(this.t('wm.baseLabel'), bx, by + 11);
 
+      // Procedural POIs (visible once sector is explored)
+      if (this.pois && this.pois.length > 0) {
+        for (let i = 0; i < this.pois.length; i++) {
+          const poi = this.pois[i];
+          if (poi.collected || !this.isPosExplored(poi.x, poi.y)) continue;
+          ctx.fillStyle = poi.type === 'matter_vein' ? '#ffd166' : (poi.type === 'supply_cache' ? '#00f0ff' : '#c06cff');
+          ctx.beginPath();
+          ctx.arc(poi.x * scale, poi.y * scale, 2.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
       // Anomalies
       const hoveredAnom = (this._worldMapHover && this._worldMapHover.kind === 'anomaly')
         ? this._worldMapHover.anomaly
         : null;
       for (let i = 0; i < this.anomalies.length; i++) {
         const a = this.anomalies[i];
+        if (a.tier > 1 && !a.cleared && !this.isPosExplored(a.x, a.y)) continue;
         const ax = a.x * scale;
         const ay = a.y * scale;
         const isHover = hoveredAnom === a;
@@ -6825,6 +7063,15 @@ window.SG = window.SG || {};
 
       // Overworld Base, Anomaly Rifts & Navigation Compasses (or Dungeon Exit Portal)
       if (this.zone === 'overworld' && SG.Sprites) {
+        if (this.pois && this.pois.length > 0 && SG.Sprites.drawPOI) {
+          for (let i = 0; i < this.pois.length; i++) {
+            const poi = this.pois[i];
+            if (poi.collected) continue;
+            if (poi.x + 140 < camX || poi.x - 140 > camX + w || poi.y + 140 < camY || poi.y - 140 > camY + h) continue;
+            const isNear = !!(this.player && Math.hypot(this.player.x - poi.x, this.player.y - poi.y) < 220);
+            SG.Sprites.drawPOI(ctx, poi, nowSec, isNear);
+          }
+        }
         SG.Sprites.drawBase(ctx, this.base, nowSec, this.inBaseZone, useSprites);
         if (this.buildings && this.buildings.length > 0 && SG.Sprites.drawBuilding) {
           for (let i = 0; i < this.buildings.length; i++) {
@@ -7395,6 +7642,15 @@ window.SG = window.SG || {};
             if (e.dead) continue;
             ctx.fillStyle = e.isRaider ? '#ff3b6b' : '#ff9e2c';
             ctx.fillRect(mx + e.x * scaleX - 1.5, my + e.y * scaleY - 1.5, 3, 3);
+          }
+        }
+
+        if (this.pois && this.pois.length > 0) {
+          for (let i = 0; i < this.pois.length; i++) {
+            const poi = this.pois[i];
+            if (poi.collected || !this.isPosExplored(poi.x, poi.y)) continue;
+            ctx.fillStyle = poi.type === 'matter_vein' ? '#ffd166' : (poi.type === 'supply_cache' ? '#00f0ff' : '#c06cff');
+            ctx.fillRect(mx + poi.x * scaleX - 1.3, my + poi.y * scaleY - 1.3, 2.6, 2.6);
           }
         }
 
