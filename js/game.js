@@ -448,7 +448,8 @@ window.SG = window.SG || {};
       const sysEl = document.getElementById('title-sys-status');
       if (sysEl) {
         const backend = (this.gpu && this.gpu.isActive()) ? this.gpu.backend : '2D CANVAS';
-        sysEl.textContent = `● ${backend} • ${preset.label}`;
+        const qKey = this.settings.quality === 'low' ? 'set.qualLow' : (this.settings.quality === 'high' ? 'set.qualHigh' : 'set.qualMed');
+        sysEl.textContent = `● ${backend} • ${this.t(qKey)}`;
       }
     }
 
@@ -788,7 +789,7 @@ window.SG = window.SG || {};
         this.particles.addText(
           this.player.x,
           this.player.y - 26,
-          this.repulsorMode ? 'БЕЛАЯ ДЫРА' : 'ЧЕРНАЯ ДЫРА',
+          this.repulsorMode ? this.t('game.modeWhite') : this.t('game.modeBlack'),
           this.repulsorMode ? '#ffb838' : '#c06cff',
           1.02
         );
@@ -2573,7 +2574,7 @@ window.SG = window.SG || {};
           if (SG.Save) localStorage.removeItem(SG.Save.META_KEY);
           this.updateTitleBest();
           setTimeout(() => {
-            resetRecBtn.textContent = 'Сбросить рекорды';
+            resetRecBtn.textContent = this.t('set.resetRecords');
           }, 1600);
         });
       }
@@ -2948,8 +2949,7 @@ window.SG = window.SG || {};
       const matter = (this.resources && this.resources.matter) || 0;
       if (matter < cost) return;
 
-      const isRu = !this.settings || this.settings.lang === 'ru' || this.settings.lang === 'uk';
-      const bName = isRu ? def.name : (def.enName || def.name);
+      const bName = this.t(`build.${def.id}.name`);
       this.closeDialogSilently(document.getElementById('build-dialog'));
       this._subModalOrigin = null;
       this.state = 'playing';
@@ -2958,9 +2958,7 @@ window.SG = window.SG || {};
       const banner = document.getElementById('build-placement-banner');
       const txt = document.getElementById('build-placement-text');
       if (txt) {
-        txt.textContent = isRu
-          ? `Строительство: ${bName} (${cost} ⚡) • ЛКМ рядом с базой • ПКМ / Esc — отмена`
-          : `Building: ${bName} (${cost} ⚡) • LMB near Base • RMB / Esc — Cancel`;
+        txt.textContent = this.t('build.banner', { name: bName, cost });
       }
       if (banner) banner.hidden = false;
     }
@@ -2980,7 +2978,7 @@ window.SG = window.SG || {};
         return false;
       }
       if (!this.isValidBuildingPos(wx, wy)) {
-        this.particles.addText(wx, wy - 20, 'Слишком близко или далеко от базы!', '#ff4d6d', 0.95, 1.1);
+        this.particles.addText(wx, wy - 20, this.t('build.invalidPos'), '#ff4d6d', 0.95, 1.1);
         return false;
       }
 
@@ -2997,7 +2995,7 @@ window.SG = window.SG || {};
 
       this.syncBaseBonuses();
       this.particles.addShockwave(wx, wy, 120, def.color, 0.45, 3);
-      this.particles.addText(wx, wy - 28, `+ ${def.name}`, def.color, 1.15, 1.5);
+      this.particles.addText(wx, wy - 28, `+ ${this.t(`build.${def.id}.name`)}`, def.color, 1.15, 1.5);
       this.audio.playLevelUp();
       this.cancelBuildPlacement();
       this.saveProgress('build_place');
@@ -3051,36 +3049,17 @@ window.SG = window.SG || {};
       const ownedList = document.getElementById('build-owned-list');
       if (!gridEl) return;
 
-      const isRu = !this.settings || this.settings.lang === 'ru' || this.settings.lang === 'uk';
       const matter = Math.floor((this.resources && this.resources.matter) || 0);
-      if (matterEl) matterEl.textContent = isRu ? `⚡ ${matter} Материи` : `⚡ ${matter} Matter`;
-
-      const eyeEl = document.querySelector('#build-dialog .modal-eyebrow');
-      const headEl = document.getElementById('build-heading');
-      const subEl = document.querySelector('#build-dialog .modal-sub');
-      const closeEl = document.getElementById('btn-close-build');
-      const ownedLbl = document.querySelector('#build-owned-section .section-label');
-      if (eyeEl) eyeEl.textContent = isRu ? 'АРХИТЕКТУРА БАЗЫ' : 'BASE ARCHITECTURE';
-      if (headEl) headEl.textContent = isRu ? 'Конструктор базы' : 'Base Constructor';
-      if (subEl) subEl.textContent = isRu
-        ? 'Стройте орбитальные модули вокруг командного ядра. Материя добывается в бою, за зачистку разломов и синтезаторами.'
-        : 'Build orbital modules around the Command Core. Earn Matter from combat, clearing rifts, and Synthesizers.';
-      if (closeEl) closeEl.textContent = isRu ? 'Закрыть [G]' : 'Close [G]';
-      if (ownedLbl) ownedLbl.textContent = isRu ? 'ПОСТРОЕННЫЕ СООРУЖЕНИЯ' : 'ACTIVE STRUCTURES';
+      if (matterEl) matterEl.textContent = this.t('build.matterPill', { n: matter });
 
       const bonuses = this.getBaseBonuses();
       if (summaryEl) {
         summaryEl.innerHTML = '';
-        const chips = isRu ? [
-          `Фарм XP: +${bonuses.xpPerSec.toFixed(0)} XP/с`,
-          `Синтез: +${bonuses.matterPerSec.toFixed(1)} ⚡/с`,
-          `Бонус HP/Щита: +${Math.round((bonuses.hpShieldMult - 1) * 100)}%`,
-          `Бонус XP: +${Math.round(bonuses.xpMultBonus * 100)}%`
-        ] : [
-          `XP Farm: +${bonuses.xpPerSec.toFixed(0)} XP/s`,
-          `Matter Synth: +${bonuses.matterPerSec.toFixed(1)} ⚡/s`,
-          `HP/Shield Bonus: +${Math.round((bonuses.hpShieldMult - 1) * 100)}%`,
-          `XP Gain Bonus: +${Math.round(bonuses.xpMultBonus * 100)}%`
+        const chips = [
+          this.t('build.statXp', { n: bonuses.xpPerSec.toFixed(0) }),
+          this.t('build.statSynth', { n: bonuses.matterPerSec.toFixed(1) }),
+          this.t('build.statHp', { n: Math.round((bonuses.hpShieldMult - 1) * 100) }),
+          this.t('build.statXpBonus', { n: Math.round(bonuses.xpMultBonus * 100) })
         ];
         chips.forEach(text => {
           const span = document.createElement('span');
@@ -3103,8 +3082,8 @@ window.SG = window.SG || {};
 
         const sprite = SG.Sprites && SG.Sprites.units && SG.Sprites.units[`bld_${def.id}`];
         const thumbUrl = sprite && typeof sprite.toDataURL === 'function' ? sprite.toDataURL() : '';
-        const dName = isRu ? def.name : (def.enName || def.name);
-        const dDesc = isRu ? def.desc : (def.enDesc || def.desc);
+        const dName = this.t(`build.${def.id}.name`);
+        const dDesc = this.t(`build.${def.id}.desc`);
         card.innerHTML = `
           <div class="build-card-top">
             <div class="build-card-title-wrap">
@@ -3117,7 +3096,7 @@ window.SG = window.SG || {};
           <div class="build-card-foot">
             <span class="build-card-rate">${def.rateLabel(1)}</span>
             <button type="button" class="btn-primary build-place-btn" style="padding:6px 12px;font-size:12px" ${(!canAfford || atLimit) ? 'disabled' : ''}>
-              ${atLimit ? (isRu ? 'Лимит' : 'Maxed') : `${isRu ? 'Построить' : 'Build'} (${cost} ⚡)`}
+              ${atLimit ? this.t('build.limit') : this.t('build.placeBtn', { cost })}
             </button>
           </div>
         `;
@@ -3141,18 +3120,18 @@ window.SG = window.SG || {};
 
           const row = document.createElement('div');
           row.className = 'build-owned-row';
-          const oName = isRu ? def.name : (def.enName || def.name);
+          const oName = this.t(`build.${def.id}.name`);
           row.innerHTML = `
             <div class="build-owned-info">
               <strong style="color:${def.color}">${oName}</strong>
-              <span class="build-card-count">${isRu ? 'УР.' : 'LV.'} ${b.level}/${def.maxLevel}</span>
+              <span class="build-card-count">${this.t('build.lv')} ${b.level}/${def.maxLevel}</span>
               <span class="build-card-rate">${def.rateLabel(b.level)}</span>
             </div>
             <div class="build-owned-actions">
               <button type="button" class="hud-btn build-upg-btn" ${(!canUpg || isMax) ? 'disabled' : ''}>
-                ${isMax ? 'MAX' : `${isRu ? 'Улучшить' : 'Upgrade'} (${upgCost} ⚡)`}
+                ${isMax ? 'MAX' : this.t('build.upgradeBtn', { cost: upgCost })}
               </button>
-              <button type="button" class="hud-btn build-del-btn" style="border-color:rgba(255,77,109,0.45);color:#ff8fa3">${isRu ? 'Разобрать' : 'Dismantle'}</button>
+              <button type="button" class="hud-btn build-del-btn" style="border-color:rgba(255,77,109,0.45);color:#ff8fa3">${this.t('build.dismantleBtn')}</button>
             </div>
           `;
           const upgBtn = row.querySelector('.build-upg-btn');
@@ -3401,7 +3380,7 @@ window.SG = window.SG || {};
           ctx.font = '800 10.5px "JetBrains Mono", system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillText(`${distM}м`, wx, wy - 14);
+          ctx.fillText(`${distM}${this.t('game.meterUnit')}`, wx, wy - 14);
         }
       }
 
@@ -3630,7 +3609,7 @@ window.SG = window.SG || {};
         if (d <= blastR + e.radius) {
           e.vx += (dx / d) * 380;
           e.vy += (dy / d) * 380;
-          this.damageEnemy(e, dmg, '#22ffa6', 'ШИПЫ!');
+          this.damageEnemy(e, dmg, '#22ffa6', this.t('game.thorns'));
         }
       }
       if (m.evoThornsRing > 0) {
@@ -3726,7 +3705,7 @@ window.SG = window.SG || {};
           this.player.shield = Math.min(this.player.maxShield, this.player.shield + count * this.player.mods.orbitReleaseHeal);
         }
         this.particles.addShockwave(well.x, well.y, well.slingshotRadius * 1.9, '#ff77ff', 0.42, 3.2);
-        this.particles.addText(well.x, well.y - 24, `ЗАЛП ОРБИТЫ ×${count}!`, '#ff99ff', 1.22);
+        this.particles.addText(well.x, well.y - 24, this.t('game.orbitSalvo', { n: count }), '#ff99ff', 1.22);
         this.audio.playSlingshot();
       }
       return count;
@@ -4557,7 +4536,7 @@ window.SG = window.SG || {};
           this.particles.addShockwave(this.player.x, this.player.y, 240, '#ffd166', 0.55, 3.8);
           this.particles.addShockwave(this.player.x, this.player.y, 165, '#00f0ff', 0.45, 3.0);
           this.particles.burst(this.player.x, this.player.y, 45, '#ffd166', 90, 340, 0.65, true);
-          this.particles.addText(this.player.x, this.player.y - 34, `ЭВОЛЮЦИЯ: ${upg.evolution.title.toUpperCase()}!`, '#ffd166', 1.32, 1.8);
+          this.particles.addText(this.player.x, this.player.y - 34, this.t('game.evolutionToast', { title: upg.evolution.title.toUpperCase() }), '#ffd166', 1.32, 1.8);
           this.addScreenShake(8);
           this.addHitstop(0.045);
           if (typeof this.audio.playEvolution === 'function') this.audio.playEvolution();
@@ -4644,7 +4623,7 @@ window.SG = window.SG || {};
       document.getElementById('go-best').textContent = (isEndless ? this.bestEndlessScore : this.bestScore).toLocaleString(loc);
       document.getElementById('go-wave').textContent = isEndless
         ? `∞ ${this.t('hud.waveDefault', { wave: this.wave.toLocaleString(loc) })}`
-        : `${this.stats.anomaliesCleared || 0} / В.${this.wave}`;
+        : this.t('go.waveShort', { c: this.stats.anomaliesCleared || 0, w: this.wave });
       document.getElementById('go-kills').textContent = String(this.stats.kills);
       document.getElementById('go-slingshots').textContent = String(this.stats.slingshots);
       document.getElementById('go-hijacks').textContent = String(this.stats.hijacks);
@@ -5222,7 +5201,7 @@ window.SG = window.SG || {};
             const ePushAng = Math.atan2(e1.y - this.player.y, e1.x - this.player.x);
             e1.vx += Math.cos(ePushAng) * 520;
             e1.vy += Math.sin(ePushAng) * 520;
-            this.damageEnemy(e1, ramDmg, '#22ffa6', 'ТАРАН!');
+            this.damageEnemy(e1, ramDmg, '#22ffa6', this.t('game.ram'));
             if (this.player.mods.evoRamJuggernaut > 0) {
               this.player.invulnTimer = Math.max(this.player.invulnTimer, 0.5);
               this.player.shield = Math.min(this.player.maxShield, this.player.shield + 8);
@@ -5266,7 +5245,7 @@ window.SG = window.SG || {};
               const colDmg = Math.round(38 * this.player.mods.collisionMult);
               this.stats.annihilations++;
               this.particles.burst((e1.x + e2.x) * 0.5, (e1.y + e2.y) * 0.5, 16, '#ff6be6', 80, 240, 0.45);
-              this.damageEnemy(e1, colDmg, '#ff85f2', 'АННИГИЛЯЦИЯ!');
+              this.damageEnemy(e1, colDmg, '#ff85f2', this.t('game.annihilation'));
               this.damageEnemy(e2, colDmg, '#ff85f2');
             }
           }
@@ -5679,7 +5658,7 @@ window.SG = window.SG || {};
                   b.y = e.y + ny * (e.radius + b.radius + 5);
                   this.audio.playDeflect();
                   this.particles.burst(b.x, b.y, 8, '#7df9ff', 60, 180, 0.25);
-                  this.particles.addText(b.x, b.y - 12, 'ЩИТ!', '#7df9ff', 0.85, 0.55);
+                  this.particles.addText(b.x, b.y - 12, this.t('game.shieldHit'), '#7df9ff', 0.85, 0.55);
                   break;
                 }
               }
@@ -5691,7 +5670,7 @@ window.SG = window.SG || {};
 
               if (b.hijacked) {
                 finalDmg = Math.round(b.damage * this.player.mods.hijackMult * 1.8);
-                label = 'КОНТР-ИМПУЛЬС!';
+                label = this.t('game.counterPulse');
                 col = '#ffd166';
                 this.stats.hijacks++;
                 const hijackHeal = this.player.mods.hijackShieldHeal + (this.player.mods.evoHijackHoming > 0 ? 5 : 0);
@@ -5715,10 +5694,10 @@ window.SG = window.SG || {};
                   }
                 }
               } else if (b.slingshotBoosted) {
-                label = 'ОРБИТАЛЬНЫЙ!';
+                label = this.t('game.orbital');
                 col = '#e879f9';
               } else if (b.isCrit) {
-                label = 'КРИТ!';
+                label = this.t('game.crit');
                 col = '#ffd166';
               }
 
@@ -5873,7 +5852,7 @@ window.SG = window.SG || {};
             const gained = Math.min(this.player.maxHp - this.player.hp, pk.val);
             this.player.hp += gained;
             this.player.healBuffer += gained;
-            this.particles.addText(this.player.x, this.player.y - 22, `+${pk.val} КОРПУС`, '#22ffa6', 1.0);
+            this.particles.addText(this.player.x, this.player.y - 22, this.t('game.healPickup', { n: pk.val }), '#22ffa6', 1.0);
           }
           this.pickups.splice(i, 1);
         }
@@ -6275,6 +6254,7 @@ window.SG = window.SG || {};
         if (this.gameMode === 'openworld') {
           const m = Math.floor((this.resources && this.resources.matter) || 0);
           els.matter.textContent = `⚡ ${m}`;
+          els.matter.title = this.t('hud.matterTitle');
         }
       }
       if (els.combo) els.combo.textContent = `×${this.combo.toFixed(1)}`;
@@ -6379,10 +6359,7 @@ window.SG = window.SG || {};
       if (els.buildBtn) {
         els.buildBtn.hidden = (this.zone !== 'overworld');
         if (this.zone === 'overworld') {
-          const isRuHud = !this.settings || this.settings.lang === 'ru' || this.settings.lang === 'uk';
-          els.buildBtn.innerHTML = isRuHud
-            ? 'База <span class="key-hint">[G]</span>'
-            : 'Base <span class="key-hint">[G]</span>';
+          els.buildBtn.innerHTML = this.t('hud.build');
         }
       }
 

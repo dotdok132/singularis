@@ -1333,12 +1333,12 @@ window.SG = window.SG || {};
       }
 
       // Label & live rate
-      const isRu = SG.I18n && (SG.I18n.current === 'ru' || SG.I18n.current === 'uk');
       ctx.textAlign = 'center';
       ctx.font = '800 10px "JetBrains Mono", monospace';
       ctx.fillStyle = '#e2f8ff';
-      const sName = isRu ? def.shortName : (def.enShortName || def.shortName);
-      ctx.fillText(`${sName} [${isRu ? 'УР.' : 'LV.'}${lvl}]`, 0, -47);
+      const sName = tr(`build.${b.type}.short`, null, def.enShortName || def.shortName);
+      const lvLabel = tr('build.lv', null, 'LV.');
+      ctx.fillText(`${sName} [${lvLabel}${lvl}]`, 0, -47);
 
       if (def.rateLabel) {
         ctx.font = '700 9.5px "JetBrains Mono", monospace';
@@ -1388,9 +1388,8 @@ window.SG = window.SG || {};
       ctx.textAlign = 'center';
       ctx.font = '800 10.5px "JetBrains Mono", monospace';
       ctx.fillStyle = col;
-      const isRuG = SG.I18n && (SG.I18n.current === 'ru' || SG.I18n.current === 'uk');
-      const gName = isRuG ? def.name : (def.enName || def.name);
-      ctx.fillText(valid ? `${isRuG ? 'ЛКМ' : 'LMB'}: ${gName}` : (isRuG ? 'НЕЛЬЗЯ ПОСТРОИТЬ ЗДЕСЬ' : 'CANNOT BUILD HERE'), 0, -49);
+      const gName = tr(`build.${def.id}.name`, null, def.enName || def.name);
+      ctx.fillText(valid ? tr('build.ghostPlace', { name: gName }, `LMB: ${gName}`) : tr('build.ghostInvalid', null, 'CANNOT BUILD HERE'), 0, -49);
       ctx.restore();
     },
 
